@@ -24,7 +24,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
 
 from .article import SENTENCE_ENDINGS, read_lines
 from .voices import PROJECT_ROOT
@@ -33,7 +33,10 @@ W, H, FPS = 1080, 1920, 30
 MARGIN = 70
 SHORT_PAUSE, LONG_PAUSE = 0.25, 0.6  # must match article.read_article defaults
 
-# TikTok covers roughly the top 150 px, bottom 400 px and right 130 px with its UI.
+# TikTok's UI, measured on an iPhone 14 Pro Max (19.5:9): the video is scaled to fill the height, cropping
+# ~55 px off each side; the status + search bar cover the top ~225 px, the button rail covers x > ~905 for
+# y ~900-1610, and the username/description cover everything below ~1620.
+CROP_X, SAFE_TOP, RAIL_X, SAFE_BOTTOM = 55, 240, 880, 1600
 HEADER_Y, CARD_A_Y, CARD_B_Y, CARD_H = 250, 470, 850, 350
 CAPTION_CY, PROGRESS_Y = 1340, 1480
 
@@ -61,6 +64,9 @@ def font_path() -> str:
 
 @lru_cache(maxsize=None)
 def font(size: int, weight: str = "Regular") -> ImageFont.FreeTypeFont:
+    if not features.check("raqm"):  # without it Khmer clusters render unshaped (coeng stacks fall apart)
+        raise SystemExit("Pillow has no Raqm text shaping. On macOS: brew install fribidi && "
+                         "sudo ln -s /opt/homebrew/lib/libfribidi.dylib /usr/local/lib/")
     f = ImageFont.truetype(font_path(), size, layout_engine=ImageFont.Layout.RAQM)
     f.set_variation_by_name(weight)
     return f

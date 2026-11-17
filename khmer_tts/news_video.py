@@ -1,6 +1,6 @@
 """Broadcast-news style vertical video: storyboards with "style": "news" (see videos/mercedes_rma_news.json).
 
-Layout (1080x1920, kept clear of TikTok's UI: top ~150 px, bottom ~400 px, right ~130 px):
+Layout (1080x1920, kept clear of TikTok's UI and side crop on tall phones, see SAFE_TOP etc. in video.py):
     full-bleed article photos with slow Ken Burns zoom/pan and cross-fades, over a blurred copy of the photo
     top-left channel bug + date, optional disclosure tag top-right
     key-fact chips stacked above a lower third (red tag, white headline bar, navy subtitle strip)
@@ -22,11 +22,11 @@ import numpy as np
 import soundfile as sf
 from PIL import Image, ImageDraw, ImageFilter
 
-from .video import (FPS, H, HIGHLIGHT, LOUDNORM, W, back_out, ease_out, line_timings, load_storyboard,
+from .video import (CROP_X, FPS, H, HIGHLIGHT, LOUDNORM, RAIL_X, SAFE_TOP, W, back_out, ease_out, line_timings, load_storyboard,
                     synth_sfx, text_image)
 from .voices import PROJECT_ROOT
 
-L, R = 70, W - 130                 # content stays left of TikTok's right-hand buttons
+L, R = CROP_X + 45, RAIL_X        # inside the side crop and left of TikTok's right-hand buttons
 INTRO, OUTRO, OUTRO_GAP = 3.2, 4.5, 0.3
 PHOTO_H = 1250                     # sharp photo area; fades into the blurred fill below ~880
 FACTS_BOTTOM, TAG_Y, CAPTION_Y = 975, 1000, 1300
@@ -204,10 +204,10 @@ def build_intro(sb: dict, sfx: list) -> list[El]:
     first = sb["scenes"][0]
     red = band(sb.get("channel", "ព័ត៌មាន"), 84, WHITE, RED, 190)
     white = band(" · ".join(x for x in (first.get("tag"), sb.get("date")) if x), 38, INK, WHITE, 96)
-    head = shadowed(text_image(first["title"], 66, "Bold", WHITE, max_w=W - 2 * L, line_gap=1.4, highlight=HIGHLIGHT))
+    head = shadowed(text_image(first["title"], 66, "Bold", WHITE, max_w=R - L, line_gap=1.4, highlight=HIGHLIGHT))
     sfx += [(0.0, "riser"), (0.5, "impact"), (0.85, "swish")]
     return [El(red, 0, 640, 0.15, "wipe", INTRO), El(white, 0, 830, 0.45, "wipe", INTRO),
-            El(head, (W - head.width) // 2, 970, 0.85, "up", INTRO)]
+            El(head, (L + R - head.width) // 2, 970, 0.85, "up", INTRO)]  # centred left of the button rail
 
 
 def build_outro(sb: dict, t0: float, total: float, sfx: list) -> list[El]:
@@ -219,8 +219,8 @@ def build_outro(sb: dict, t0: float, total: float, sfx: list) -> list[El]:
            El(white, 0, 830, t0 + 0.4, "wipe", total + 1)]
     y = 980
     for i, line in enumerate(sb.get("credits", [])):
-        c = shadowed(text_image(line, 30, "Medium", SOFT, max_w=W - 2 * L, line_gap=1.35))
-        els.append(El(c, (W - c.width) // 2, y, t0 + 0.8 + 0.1 * i, "fade", total + 1))
+        c = shadowed(text_image(line, 30, "Medium", SOFT, max_w=R - L, line_gap=1.35))
+        els.append(El(c, (L + R - c.width) // 2, y, t0 + 0.8 + 0.1 * i, "fade", total + 1))
         y += c.height - 20
     sfx += [(t0, "whoosh"), (t0 + 0.15, "impact"), (t0 + 0.5, "ding")]
     return els
@@ -318,10 +318,10 @@ def render_frame(n: int) -> bytes:
 
     if main:  # persistent chrome: channel bug, date, disclosure
         a = min(1.0, (t - INTRO) / 0.4, (st["t_outro"] - t) / FADE)
-        comp(frame, fade(st["bug"], a), L, 160)
-        comp(frame, fade(st["date"], a), L - 14, 160 + st["bug"].height - 6)
+        comp(frame, fade(st["bug"], a), L, SAFE_TOP)
+        comp(frame, fade(st["date"], a), L - 14, SAFE_TOP + st["bug"].height - 6)
         if st["disclosure"] is not None:
-            comp(frame, fade(st["disclosure"], a), R - st["disclosure"].width, 162)
+            comp(frame, fade(st["disclosure"], a), R - st["disclosure"].width, SAFE_TOP + 2)
 
     for el in st["els"]:
         draw_el(frame, el, t)
@@ -335,8 +335,8 @@ def render_frame(n: int) -> bytes:
         frame.alpha_composite(st["ticker_bg"], (0, TICKER_Y))
         loop = st["ticker_loop"]
         off = int((t - INTRO) * TICKER_SPEED) % (loop.width // 2)
-        frame.alpha_composite(loop.crop((off, 0, off + W - LABEL_W, loop.height)),
-                              (LABEL_W, TICKER_Y + (TICKER_H - loop.height) // 2))
+        frame.alpha_composite(loop.crop((off, 0, off + W - CROP_X - LABEL_W, loop.height)),
+                              (CROP_X + LABEL_W, TICKER_Y + (TICKER_H - loop.height) // 2))
         frame.alpha_composite(st["ticker_label"], (0, TICKER_Y))
         d = ImageDraw.Draw(frame)
         p = (t - INTRO) / (st["t_outro"] - INTRO)
@@ -354,16 +354,16 @@ def prepare(sb: dict, root: Path):
                           + np.clip((y - 820) / 360, 0, 1) * 215, 0, 235)
     overlay = Image.fromarray(np.repeat(ov, W, axis=1).astype(np.uint8), "RGBA")
 
-    label = Image.new("RGBA", (LABEL_W, TICKER_H), RED + (255,))
+    label = Image.new("RGBA", (CROP_X + LABEL_W, TICKER_H), RED + (255,))  # text inside the side crop
     lt = text_image(sb.get("ticker_label", "ព័ត៌មានថ្មី"), 30, "Bold", WHITE, line_gap=1.3)
-    label.alpha_composite(lt, ((LABEL_W - lt.width) // 2, (TICKER_H - lt.height) // 2))
+    label.alpha_composite(lt, (CROP_X + (LABEL_W - lt.width) // 2, (TICKER_H - lt.height) // 2))
     tt = text_image("     •     ".join(sb.get("ticker", [])) + "     •     ", 30, "Medium", WHITE,
                     max_w=100_000, align="left", line_gap=1.3)
     reps = math.ceil(W / tt.width) + 1
     loop = Image.new("RGBA", (tt.width * reps * 2, tt.height), (0, 0, 0, 0))
     for k in range(reps * 2):
         loop.alpha_composite(tt, (k * tt.width, 0))
-    # the crop window must fit: loop.width // 2 + (W - LABEL_W) <= loop.width
+    # the crop window must fit: loop.width // 2 + (W - CROP_X - LABEL_W) <= loop.width
     disclosure = sb.get("disclosure")
     _ST.update(
         els=els, shots=shots, captions=captions, t_outro=t_outro, total=total, overlay=overlay,

@@ -28,6 +28,14 @@ python3.12 -m venv .venv-voxpocket
 
 The model (~2 GB) downloads from Hugging Face on first use.
 
+On an Apple Silicon Mac the model runs on the GPU via MPS (no NVIDIA needed). Video rendering needs
+Raqm text shaping for Khmer, which Pillow loads from fribidi:
+
+```sh
+brew install fribidi
+sudo ln -s /opt/homebrew/lib/libfribidi.dylib /usr/local/lib/
+```
+
 ## Usage
 
 ```sh

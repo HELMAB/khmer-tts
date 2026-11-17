@@ -112,7 +112,7 @@ A wrong transcript is the main cause of a bad clone.
 - **Timing:** taken from `parts/`, so captions and on-screen items are in sync with no alignment step.
 - **Animation:** cards and labels slide and pop in, and scenes fade into each other.
 - **Captions:** English terms are highlighted, short runs of Latin words never break across lines, and Khmer is wrapped without splitting letter stacks.
-- **Overlays:** a series badge, a section counter (`01 / 04`) and a progress bar, kept clear of TikTok's UI. TikTok covers about the top 150 px, bottom 400 px and right 130 px.
+- **Overlays:** a series badge, a section counter (`01 / 04`) and a progress bar, kept clear of TikTok's UI. On tall phones (iPhone 14 Pro Max) TikTok crops ~55 px off each side, covers the top ~225 px, the right-hand buttons cover x > ~905 for y ~900–1610 and the caption block covers below ~1620 (`CROP_X`, `SAFE_TOP`, `RAIL_X`, `SAFE_BOTTOM` in `video.py`).
 - **Sound effects:** synthesized, so there are no licensing issues: a whoosh at each scene, a swish for each card, a pop for each label, and a ding for each verdict and the outro.
 - **Loudness:** normalized for social platforms. Font: Google Sans (it covers Khmer).
 
