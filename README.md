@@ -81,7 +81,7 @@ Each line is also saved to `parts/NN.wav`, so a bad line can be regenerated alon
 
 `ktts video` turns a narrated article (`ktts read` output) into a 1080×1920 TikTok/Shorts video:
 animated cards per section, captions synced from the per-line `parts/` timing (English terms highlighted),
-a series badge, section counter and progress bar placed outside TikTok's UI zones, synthesized
+a series badge and section counter placed outside TikTok's UI zones, synthesized
 sound effects (whoosh, pop, ding), and loudness normalised for social platforms. Font: Google Sans.
 The storyboard JSON (`videos/*.json`) holds one caption per TTS line plus scenes keyed to line numbers.
 

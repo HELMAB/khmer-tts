@@ -1,6 +1,6 @@
 ---
 name: khmer-voice
-description: Generate Khmer speech in a cloned voice, add (clone) a new voice from a recording, or turn a narrated text into a TikTok/Reels/Shorts explainer video, in the khmer-tts project. Use when the user asks to read, speak, voice, narrate or generate audio for Khmer text or a text file "using/with <voice>", to clone a voice from an mp3/wav, to add or list voices, to regenerate a bad line, or to make a vertical/TikTok video (captions, overlays, sound effects) from a text or narration.
+description: Generate Khmer speech in a cloned voice, add (clone) a new voice from a recording, or turn a narrated text into a TikTok/Reels/Shorts explainer video, in the khmer-tts project. Use when the user asks to read, speak, voice, narrate or generate audio for Khmer text or a text file "using/with <voice>", to clone a voice from an mp3/wav, to add or list voices, to regenerate a bad line, or to make a vertical/TikTok video (captions, overlays, sound effects) from a text, a narration, a news article URL (e.g. thmeythmey.com) or a step-by-step tutorial (with browser screenshots, code and terminal windows).
 ---
 
 # Khmer voice: generate audio, clone voices, make TikTok videos
@@ -18,8 +18,17 @@ $KT video videos/STORY.json [--narration DIR] [-o OUT.mp4] [--still SEC ...] [--
 ```
 
 Model loading takes ~10 s; generation runs at roughly 2 s of compute per 1 s of audio on the
-4 GB GTX 1650. Use a 600000 ms timeout for `read`, and expect ~2 min per minute of audio.
-Filter the noisy logs: `2>&1 | grep -E "^\[|Wrote|Lines that|Error|Traceback|outputs/"`.
+4 GB GTX 1650, and ~1.35 s per 1 s on an Apple Silicon Mac (MPS, picked automatically). Run `read`
+in the background (or with a 600000 ms timeout); a 2.5 min article takes ~3.5 min on the Mac.
+Filter the noisy logs: `2>&1 | tr '\r' '\n' | grep -E "^\[|Wrote|Lines that|Error|Traceback|outputs/"`.
+
+**macOS rendering:** video text needs Pillow's Raqm shaping, which loads Homebrew's fribidi. If `video`
+stops with "Pillow has no Raqm text shaping", the user hasn't run
+`sudo ln -s /opt/homebrew/lib/libfribidi.dylib /usr/local/lib/`; until then prefix render commands with
+`DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`. Never render Khmer without Raqm (letter stacks break).
+
+**Picking a voice** when the user doesn't name one: `rfi` (news anchor) for news, `general` (casual
+tech-TikTok) for coding tutorials. Say which you picked; any narration can be swapped in later.
 
 ## A. Generate audio for a text
 
@@ -86,7 +95,18 @@ A wrong transcript is the main cause of a bad clone.
      closest to `start + duration`. Prefer a clip starting at 0 so the text starts at the transcript's start.
    - If there is no transcript, ask the user for the words in that clip (give them the start/end
      times). Do not guess. Only run an ASR model (e.g. `seanghay/whisper-medium-khmer`) with the user's OK;
-     it is a large download and they may decline.
+     it is a large download (~6 GB in the HF cache) and they may decline. Known pitfalls with that model:
+     - its generation config predates `language=`; load `GenerationConfig.from_pretrained("openai/whisper-medium")`
+       into `pipe.model.generation_config`, then pass `generate_kwargs={"language": "km", "task": "transcribe"}`;
+     - on a Mac run it on `device="cpu"` (MPS hangs; CPU takes ~35 s for a 7 s clip);
+     - if a Hugging Face download stops growing, restart it with `HF_HUB_DISABLE_XET=1` (plain HTTP resumes).
+     ASR output is rough, especially for English names in Khmer speech (React → "រៀអែក"). Clean it up,
+     show the user your reading and let them confirm before `add-voice`. In the reference text, write foreign
+     names as they are pronounced in Khmer (e.g. `general`: "រីអែក … វ្យូ"), matching what is said.
+   - `clips` finding nothing usually means the recording has gated (digital) silence or no 4-9 s stretch
+     between its pauses; find pauses yourself with
+     `ffmpeg -i SOURCE -t 40 -af silencedetect=noise=-35dB:d=0.18 -f null - 2>&1 | grep -oE "silence_(start|end): [0-9.]+"`
+     and pick a clip that ends inside a pause.
 4. Decide on `--clean` (70 Hz high-pass, light denoise, loudness normalise to -20 LUFS, peaks capped at -2 dB).
    Measure the raw clip first:
    `ffmpeg -i SOURCE -ss S -t D -af "astats=metadata=0,ebur128=framelog=quiet" -f null - 2>&1 | grep -E "Noise floor dB|^ +I:"`
@@ -112,7 +132,7 @@ A wrong transcript is the main cause of a bad clone.
 - **Timing:** taken from `parts/`, so captions and on-screen items are in sync with no alignment step.
 - **Animation:** cards and labels slide and pop in, and scenes fade into each other.
 - **Captions:** English terms are highlighted, short runs of Latin words never break across lines, and Khmer is wrapped without splitting letter stacks.
-- **Overlays:** a series badge, a section counter (`01 / 04`) and a progress bar, kept clear of TikTok's UI. On tall phones (iPhone 14 Pro Max) TikTok crops ~55 px off each side, covers the top ~225 px, the right-hand buttons cover x > ~905 for y ~900–1610 and the caption block covers below ~1620 (`CROP_X`, `SAFE_TOP`, `RAIL_X`, `SAFE_BOTTOM` in `video.py`).
+- **Overlays:** a series badge and a section counter (`01 / 04`), kept clear of TikTok's UI. On tall phones (iPhone 14 Pro Max) TikTok crops ~55 px off each side, covers the top ~225 px, the right-hand buttons cover x > ~905 for y ~900–1610 and the caption block covers below ~1620 (`CROP_X`, `SAFE_TOP`, `RAIL_X`, `SAFE_BOTTOM` in `video.py`).
 - **Sound effects:** synthesized, so there are no licensing issues: a whoosh at each scene, a swish for each card, a pop for each label, and a ding for each verdict and the outro.
 - **Loudness:** normalized for social platforms. Font: Google Sans (it covers Khmer).
 
@@ -140,20 +160,52 @@ the same storyboard works with any `read` output via `--narration`.
        `card: {name, tag, items: [[text, line], ...]}` (fits ~11 short items).
      - `quote`: `phrases: [[text, line], ...]` revealed as spoken, `by: {name, role, line}`.
        Hides the caption box (the quote is already on screen).
+     - `step` (tutorials / how-to): header like `compare` (`number`, `title`, `subtitle`), a large window
+       `media` (one object, or a list where each later window covers the previous one at its `line`), and a row
+       of chips `items: [[text, line(, "strong")], ...]`. Keep chips to **one row (~3 short ones)**; a second
+       row runs into the caption box. Optional `media_h` (default 600). Media kinds:
+       - `{"kind": "browser", "file", "url", "crop": [x, y, w, h], "line", "focus": [x, y, w, h], "focus_line"}`:
+         a screenshot region in a browser frame with the address `url`; `focus` (screenshot pixels) draws a
+         glowing ring that pops in at `focus_line`. Use it to point at the button being described.
+       - `{"kind": "code"|"terminal", "title", "line", "size", "lines": [[text, line], ...]}`: a code editor or
+         terminal; each code line appears when its narration line is spoken (HTML, `$` prompts, `#` comments
+         and `✓` output are coloured). Size 30 for ~9 short lines, 26 for ~7 lines up to ~45 chars.
+       A `headline` can also take `media` (placed at `media_y`, default 720, filling the space down to the captions).
      Pick by content: two-sided comparison → `title` + `compare`; news/report → `headline` +
-     `points` + `quote` for direct speech (see `videos/news.json`). `brands.a`/`b` colours also tint
-     the background glows (news uses blue `#3D6FE0` / red `#E0393E`).
+     `points` + `quote` for direct speech (see `videos/news.json`); step-by-step tutorial → `headline` with a
+     screenshot + one `step` per step (see `videos/vercel_deploy.json`). `brands.a`/`b` colours tint the
+     background glows (news uses blue `#3D6FE0` / red `#E0393E`) and `brands.a` colours the chips.
      Khmer has no spaces between words, so a long phrase may wrap mid-word: check stills and add a
      space at a natural phrase break in the display text (never in the TTS text).
    - `outro`: `{seconds, text, subtitle}` shown after the narration (e.g. "តាមដានសម្រាប់មេរៀនបន្ថែម" / "Follow for more").
    Put scene starts on the line that introduces the section (e.g. "ចំណុចទីមួយ…"), and each card's
    first item on the line that names that brand, so visuals land on the words.
+
+   **Screenshots for tutorials.** Capture public pages with a throwaway headless Chrome (no user profile,
+   so no accounts or cookies are involved), into `videos/images/<stem>/`:
+   ```sh
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --disable-gpu --hide-scrollbars \
+     --user-data-dir=<scratchpad>/chrome-prof --window-size=1440,900 --virtual-time-budget=8000 \
+     --screenshot=videos/images/<stem>/NAME.png "https://example.com/page"
+   ```
+   Look at every capture: pages behind a login (e.g. github.com/new, dashboards) come back as a sign-in page.
+   Never use the user's own logged-in browser for this without asking. For logged-in steps, show the
+   equivalent `terminal`/`code` window instead, or a small local demo page captured the same way
+   (`file://…`, e.g. a "live site" for `your-project.vercel.app`). To find `crop`/`focus` coordinates, draw a
+   100 px grid with labels over each capture (PIL), Read it, and read the button's box off the grid.
+   Keep crops near 1.56:1 so a window fills the 780 px column at ~550 px tall. Tell the user which pages
+   were captured; using a product's screenshots in a tutorial is their call.
 2. **Preview before rendering:** `$KT video videos/<stem>.json --still 2 20 45 …` (one time per scene,
    plus a crowded moment near each scene's end) → `outputs/stills/`. Join them and look:
    `ffmpeg -i a.png -i b.png … -filter_complex "hstack=N,scale=2400:-1" contact.png`, then Read it.
    Check: nothing overflows a card or overlaps the caption box, no names split across caption lines,
-   Khmer renders with correct stacks, check marks visible.
-3. **Render:** `$KT video videos/<stem>.json` (about 1.5-2 min for 2.5 min of video; use a 600000 ms timeout).
+   Khmer renders with correct stacks, check marks visible, focus rings sit on the right button,
+   a long card `name` doesn't run into its `tag`, and no caption leaves one short word alone on a line.
+   Compute the times from the narration instead of guessing (end of each scene = next scene's start - 0.4 s):
+   `line_timings(json.load(open(sb)), Path("."))` in `khmer_tts.video` gives `(spans, narration_end)`
+   (news style: add the 3.2 s intro).
+3. **Render:** `$KT video videos/<stem>.json` (~1 min for 2.5 min of video on an M-series Mac, ~2 min on the
+   GTX 1650 box; use a 600000 ms timeout).
    For another voice: `--narration outputs/<stem>_<voice> -o outputs/video_<stem>/tiktok_<voice>.mp4`.
 4. **Verify the real file:** grab 2-4 frames mid-animation from the MP4
    (`ffmpeg -ss T -i out.mp4 -frames:v 1 f.png`) and Read them. Measure loudness
@@ -164,7 +216,9 @@ the same storyboard works with any `read` output via `--narration`.
    only from a track the user has rights to; never add music yourself.
 
 Layout constants (card positions, caption height, colours, SFX levels) live at the top of
-`khmer_tts/video.py`. Change them there, not per video.
+`khmer_tts/video.py`. Change them there, not per video. The look: near-black background with a fading
+grid and two brand glows (`make_background`), macOS-style windows with drop shadows, no progress bar
+(the user asked for it to be removed; don't bring it back).
 
 ### News style with article photos (`"style": "news"`)
 
@@ -174,10 +228,21 @@ key-fact chips, a lower third (red `tag`, white `title` bar, `subtitle` strip), 
 a 3.2 s intro stinger before the narration and an outro card with `credits`. Scene fields: `line`, `tag`, `title`,
 `subtitle`, `images [[file, line], ...]` (from `images_dir`), `facts [[text, line], ...]`, `numbered`.
 Landscape photos are shown whole over a blurred fill; square ones fill the photo area.
+An article with a single photo is fine: list it in every scene's `images` and the zoom/pan alternates.
+Keep each lower-third `title` to one line (~22 Khmer characters); the renderer warns
+"lower third … reaches y=…, over the captions" when it wraps. For a cloned voice, set
+`"disclosure": "សំឡេង AI"` and remind the user to tick TikTok's AI-generated label (they may remove the tag).
+Example: `videos/kirirom_land.json`.
 
 Getting a URL's text and photos: Thmey Thmey (and similar sites) sit behind Cloudflare, so curl gets a 403.
-Read the article through Chrome (claude-in-chrome). For photos, navigate the tab to the image host
-(e.g. `image.thmeythmey.com`) so fetches are same-origin, then bundle all images as base64 into ONE JSON download
-(Chrome blocks multiple automatic downloads), decode it from `~/Downloads` into `videos/images/<stem>/` and delete
-the download. Credit the source and photographer in `credits`; if the article is marked `អត្ថបទពាណិជ្ជកម្ម`
-(advertorial), set `disclosure` and tell the user.
+Read the article through Chrome (claude-in-chrome). `get_page_text` often returns a sidebar story instead
+of the article; find the body with JS instead (`document.body.innerText`, sliced from the dateline such as
+"ភ្នំពេញ៖" to the author box "អ្នកសរសេរអត្ថបទ"). The article photos are the full-size
+`image.thmeythmey.com/pictures/<date>/image_*.jpg` files (also `og:image`); `thumb2/` images are other stories.
+The image host blocks curl too (403). Ask before downloading (file name, host, size), then navigate the tab to
+the image host so fetches are same-origin: for one photo, `fetch` it as a blob and click a download link;
+for several, bundle them as base64 into ONE JSON download (Chrome blocks multiple automatic downloads).
+Move/decode from `~/Downloads` into `videos/images/<stem>/`, delete the download, and close the tab.
+Credit the source, author and photographer (if named) in `credits`. `អត្ថបទពាណិជ្ជកម្ម` (advertorial) is also
+a menu item on every Thmey Thmey page, so check for it near the article's title/tags, not in the whole page
+text; if the article really is one, set `disclosure` and tell the user.

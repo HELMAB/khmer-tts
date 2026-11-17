@@ -40,9 +40,9 @@ CROP_X, SAFE_TOP, RAIL_X, SAFE_BOTTOM = 55, 240, 880, 1600
 MARGIN, CONTENT_R = CROP_X + 45, RAIL_X
 CONTENT_W, CX = CONTENT_R - MARGIN, (MARGIN + CONTENT_R) // 2
 HEADER_Y, CARD_A_Y, CARD_B_Y, CARD_H = 330, 480, 850, 350
-CAPTION_CY, PROGRESS_Y = 1340, 1480
+CAPTION_CY = 1340
 
-BG_TOP, BG_BOTTOM = (11, 14, 26), (20, 24, 48)
+BG_TOP, BG_BOTTOM = (8, 9, 15), (12, 14, 26)
 CARD_BG = (24, 28, 48, 235)
 TEXT, MUTED, HIGHLIGHT = (245, 246, 250), (160, 166, 190), (255, 210, 70)
 ANIM = 0.4  # seconds for an element to slide/fade in
@@ -373,12 +373,160 @@ def build_quote(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     return els
 
 
+# ---------------------------------------------------------------- media windows (browser / code / terminal)
+
+BAR_H, WIN_R = 54, 22
+WIN_BG, WIN_BAR = (16, 18, 27), (28, 31, 44)
+CODE_COLORS = [  # first match wins; (pattern, colour)
+    (re.compile(r"^# .*"), (110, 118, 140)), (re.compile(r"^\$ "), (80, 220, 140)), (re.compile(r"^✓.*"), (80, 220, 140)),
+    (re.compile(r"<!--.*?-->"), (110, 118, 140)), (re.compile(r'"[^"]*"'), (152, 224, 136)),
+    (re.compile(r"</?[A-Za-z!][\w-]*|/?>"), (255, 121, 168)), (re.compile(r"\b[a-z-]+(?==)"), (120, 190, 255)),
+    (re.compile(r"\b(git|vercel|npm)\b"), (120, 190, 255)),
+]
+
+
+@lru_cache(maxsize=None)
+def mono(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+    out = subprocess.run(["fc-match", "-f", "%{file}", "Menlo"], capture_output=True, text=True)
+    return ImageFont.truetype(out.stdout.strip(), size, index=1 if bold else 0)
+
+
+def window_frame(w: int, h: int, title: str, url: bool = False) -> Image.Image:
+    """macOS-style window: rounded body, title bar with traffic lights and a title or address pill."""
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=WIN_R, fill=WIN_BG, outline=(255, 255, 255, 40), width=2)
+    d.rounded_rectangle((1, 1, w - 2, BAR_H), radius=WIN_R, fill=WIN_BAR)
+    d.rectangle((1, BAR_H - WIN_R, w - 2, BAR_H), fill=WIN_BAR)
+    for i, c in enumerate([(255, 95, 87), (254, 188, 46), (40, 200, 64)]):
+        d.ellipse((24 + i * 30, BAR_H // 2 - 8, 40 + i * 30, BAR_H // 2 + 8), fill=c)
+    f = font(24, "Medium")
+    tw = f.getlength(title)
+    if url:  # address pill with a small lock
+        pw = min(w - 260, tw + 70)
+        px = (w - pw) // 2
+        d.rounded_rectangle((px, 11, px + pw, BAR_H - 11), radius=16, fill=(12, 13, 20))
+        d.rounded_rectangle((px + 20, BAR_H // 2 - 2, px + 32, BAR_H // 2 + 8), radius=2, fill=MUTED)
+        d.arc((px + 21, BAR_H // 2 - 10, px + 31, BAR_H // 2 + 2), 180, 360, fill=MUTED, width=2)
+        d.text((px + 44, BAR_H // 2), title, font=f, fill=TEXT, anchor="lm")
+    else:
+        d.text((w // 2, BAR_H // 2), title, font=f, fill=MUTED, anchor="mm")
+    return img
+
+
+def browser_window(shot: Image.Image, crop, w: int, url: str) -> tuple[Image.Image, float]:
+    """Screenshot region in a browser frame; returns the window and the screenshot->window scale."""
+    cx, cy, cw, ch = crop
+    s = w / cw
+    h = BAR_H + int(ch * s)
+    img = window_frame(w, h, url, url=True)
+    body = shot.crop((cx, cy, cx + cw, cy + ch)).resize((w - 4, h - BAR_H - 2), Image.LANCZOS)
+    mask = Image.new("L", body.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, -WIN_R, body.width - 1, body.height - 1), radius=WIN_R - 2, fill=255)
+    img.paste(body.convert("RGB"), (2, BAR_H), mask)
+    return img, s
+
+
+def code_line(text: str, size: int) -> Image.Image:
+    f = mono(size)
+    img = Image.new("RGBA", (int(f.getlength(text)) + 4, int(size * 1.6)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    colors = [TEXT] * len(text)
+    for pat, col in reversed(CODE_COLORS):  # earlier patterns win, so paint them last
+        for m in pat.finditer(text):
+            colors[m.start():m.end()] = [col] * (m.end() - m.start())
+    x = 0.0
+    for ch, col in zip(text, colors):
+        d.text((x, img.height // 2), ch, font=f, fill=col, anchor="lm")
+        x += f.getlength(ch)
+    return img
+
+
+def focus_ring(w: int, h: int) -> Image.Image:
+    pad = 14
+    img = Image.new("RGBA", (w + 2 * pad, h + 2 * pad), (0, 0, 0, 0))
+    ImageDraw.Draw(img).rounded_rectangle((pad, pad, pad + w, pad + h), radius=14, outline=HIGHLIGHT + (255,), width=6)
+    glow = img.filter(ImageFilter.GaussianBlur(8))
+    glow.alpha_composite(img)
+    return glow
+
+
+def build_media(media: dict, top: int, max_h: int, at, sfx: list, root: Path) -> tuple[list[Element], int]:
+    """One window in the content column starting at `top`; returns its elements and its bottom edge.
+    kinds: browser {file, crop, url, focus, focus_line}, code/terminal {title, lines [[text, line], ...]}."""
+    t = at(media["line"])
+    els: list[Element] = []
+    if media["kind"] == "browser":
+        shot = Image.open(root / media["file"])
+        crop = media.get("crop", (0, 0, shot.width, shot.height))
+        if BAR_H + crop[3] * CONTENT_W / crop[2] > max_h:  # too tall for the slot: trim the bottom
+            crop = (crop[0], crop[1], crop[2], int((max_h - BAR_H) * crop[2] / CONTENT_W))
+        win, s = browser_window(shot, crop, CONTENT_W, media["url"])
+        els.append(Element(shadow(win), MARGIN - SHADOW, top - SHADOW, t, dy=50))
+        if fx := media.get("focus"):
+            ring = focus_ring(int(fx[2] * s), int(fx[3] * s))
+            fl = at(media.get("focus_line", media["line"])) + 0.35
+            els.append(Element(ring, MARGIN + 2 + int((fx[0] - crop[0]) * s) - 14,
+                               top + BAR_H + int((fx[1] - crop[1]) * s) - 14, fl, dy=0, scale_in=True))
+            sfx.append((fl, "pop"))
+        bottom = top + win.height
+    else:
+        size = media.get("size", 24)
+        lines = [(code_line(text, size), line) for text, line in media["lines"]]
+        h = min(max_h, BAR_H + 34 + sum(img.height for img, _ in lines) + 20)
+        win = window_frame(CONTENT_W, h, media["title"])
+        els.append(Element(shadow(win), MARGIN - SHADOW, top - SHADOW, t, dy=50))
+        y = top + BAR_H + 26
+        for k, (img, line) in enumerate(lines):
+            tl = max(at(line), t + 0.2) + 0.12 * k if line == media["line"] else at(line)
+            els.append(Element(img, MARGIN + 30, y, tl, dy=10))
+            y += img.height
+        bottom = top + h
+    sfx.append((t, "swish"))
+    return els, bottom
+
+
+SHADOW = 30
+
+
+def shadow(img: Image.Image) -> Image.Image:
+    out = Image.new("RGBA", (img.width + 2 * SHADOW, img.height + 2 * SHADOW), (0, 0, 0, 0))
+    sh = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    sh.putalpha(img.getchannel("A").point(lambda v: v * 170 // 255))
+    out.alpha_composite(sh, (SHADOW, SHADOW + 12))
+    out = out.filter(ImageFilter.GaussianBlur(16))
+    out.alpha_composite(img, (SHADOW, SHADOW))
+    return out
+
+
+def build_step(scene: dict, brands: dict, at, sfx: list, root: Path) -> list[Element]:
+    """Tutorial step: numbered header, one or more windows (each replaces the last) and a row of chips."""
+    t0 = at(scene["line"])
+    els = build_header(scene, t0, False)
+    top, bottom = CARD_A_Y, CARD_A_Y
+    media = scene.get("media", [])
+    for m in media if isinstance(media, list) else [media]:
+        e, b = build_media(m, top, scene.get("media_h", 600), at, sfx, root)
+        els += e
+        bottom = max(bottom, b)
+    color = hex_rgb(brands["a"]["color"])
+    x, y = MARGIN, bottom + 26
+    for text, line, *style in scene.get("items", []):
+        chip = _chip(text, 30, color, "strong" in style)
+        if x + chip.width > CONTENT_R and x > MARGIN:
+            x, y = MARGIN, y + chip.height + 12
+        els.append(Element(chip, x, y, at(line), dy=20, scale_in=True))
+        sfx.append((at(line), "ding" if "strong" in style else "pop"))
+        x += chip.width + 12
+    return els
+
+
 def build_timeline(sb: dict, root: Path):
     spans, narration_end = line_timings(sb, root)
     at = lambda line: spans[line - 1][0]  # noqa: E731
     sfx: list[tuple[float, str]] = []
     scenes: list[Scene] = []
-    compare_total = sum(1 for s in sb["scenes"] if s["type"] in ("compare", "points") and not s.get("verdict"))
+    compare_total = sum(1 for s in sb["scenes"] if s["type"] in ("compare", "points", "step") and not s.get("verdict"))
     starts = [at(s["line"]) for s in sb["scenes"]] + [narration_end]
     for i, s in enumerate(sb["scenes"]):
         t0, t1 = starts[i], starts[i + 1]
@@ -387,6 +535,11 @@ def build_timeline(sb: dict, root: Path):
             els = build_title(s, sb["brands"], at, sfx)
         elif kind == "headline":
             els = build_headline(s, sb["brands"], at, sfx)
+            if media := s.get("media"):  # a window under the headline, filling the space above the captions
+                els += build_media(media, s.get("media_y", 720), 1210 - s.get("media_y", 720), at, sfx, root)[0]
+        elif kind == "step":
+            els = build_step(s, sb["brands"], at, sfx, root)
+            counter = f"{s['number']} / {compare_total:02d}"
         elif kind == "quote":
             els = build_quote(s, sb["brands"], at, sfx)
         elif kind in ("compare", "points"):
@@ -401,7 +554,7 @@ def build_timeline(sb: dict, root: Path):
             sfx.append((t0, "whoosh"))
             counter = "" if verdict else f"{s['number']} / {compare_total:02d}"
         else:
-            raise SystemExit(f"unknown scene type {kind!r} (title, headline, compare, points, quote)")
+            raise SystemExit(f"unknown scene type {kind!r} (title, headline, compare, points, step, quote)")
         scenes.append(Scene(t0, t1, els, counter, captions=s.get("captions", kind != "quote")))
 
     outro = sb.get("outro")
@@ -429,20 +582,24 @@ def build_timeline(sb: dict, root: Path):
 # ---------------------------------------------------------------- frames
 
 def make_background(glow_a=(255, 45, 32), glow_b=(109, 179, 63)) -> Image.Image:
-    """Larger-than-frame backdrop (gradient, glows, dot grid); frames crop a slowly drifting window."""
+    """Larger-than-frame backdrop: near-black, a fine grid fading out from the upper middle, two soft brand
+    glows and a vignette; frames crop a slowly drifting window."""
     bw, bh = W + 160, H + 160
-    grad = np.linspace(0, 1, bh)[:, None, None]
-    arr = (np.array(BG_TOP) * (1 - grad) + np.array(BG_BOTTOM) * grad).astype(np.uint8)
-    bg = Image.fromarray(np.repeat(arr, bw, axis=1), "RGB").convert("RGBA")
+    y, x = np.mgrid[0:bh, 0:bw].astype(np.float32)
+    base = np.array(BG_TOP, np.float32) * (1 - y / bh)[..., None] + np.array(BG_BOTTOM, np.float32) * (y / bh)[..., None]
+    # grid lines, strongest around the content and fading towards the edges
+    spot = np.exp(-(((x - bw * 0.45) / (bw * 0.55)) ** 2 + ((y - bh * 0.38) / (bh * 0.42)) ** 2))
+    line = ((x % 72) < 1.5) | ((y % 72) < 1.5)
+    base += (line * spot * 22)[..., None]
+    # vignette
+    r = np.sqrt(((x - bw / 2) / (bw * 0.75)) ** 2 + ((y - bh / 2) / (bh * 0.7)) ** 2)
+    base *= np.clip(1.15 - 0.55 * r, 0.45, 1.0)[..., None]
+    bg = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
     glow = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
     d = ImageDraw.Draw(glow)
-    d.ellipse((-250, -150, 650, 750), fill=glow_a + (70,))
-    d.ellipse((bw - 650, bh - 950, bw + 250, bh - 50), fill=glow_b + (70,))
-    bg.alpha_composite(glow.filter(ImageFilter.GaussianBlur(160)))
-    dots = ImageDraw.Draw(bg)
-    for y in range(0, bh, 54):
-        for x in range(0, bw, 54):
-            dots.ellipse((x, y, x + 3, y + 3), fill=(255, 255, 255, 18))
+    d.ellipse((-350, -250, 650, 650), fill=glow_a + (60,))
+    d.ellipse((bw - 600, bh - 1000, bw + 350, bh - 100), fill=glow_b + (55,))
+    bg.alpha_composite(glow.filter(ImageFilter.GaussianBlur(190)))
     return bg
 
 
@@ -515,14 +672,6 @@ def render_frame(n: int) -> bytes:
             frame.alpha_composite(with_alpha(box, a), (MARGIN, y))
             frame.alpha_composite(with_alpha(img, a), (CX - img.width // 2, y + 20))
             break
-
-    # progress bar
-    d = ImageDraw.Draw(frame)
-    p = min(1.0, t / st["total"])
-    d.rounded_rectangle((MARGIN, PROGRESS_Y, CONTENT_R, PROGRESS_Y + 8), radius=4, fill=(255, 255, 255, 40))
-    if p > 0.005:
-        d.rounded_rectangle((MARGIN, PROGRESS_Y, MARGIN + int((CONTENT_W) * p), PROGRESS_Y + 8),
-                            radius=4, fill=HIGHLIGHT)
     return frame.convert("RGB").tobytes()
 
 
