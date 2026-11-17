@@ -584,6 +584,9 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
            narration: str | None = None):
     root = PROJECT_ROOT
     sb = load_storyboard(storyboard_path, narration)
+    if sb.get("style") == "news":
+        from .news_video import render as render_news
+        return render_news(storyboard_path, out, workers, seconds, narration)
     out = out or root / sb["output"]
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -624,6 +627,9 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
 def render_still(storyboard_path: Path, t: float, out: Path, narration: str | None = None) -> None:
     """One frame at time t, for checking layout without rendering the whole video."""
     sb = load_storyboard(storyboard_path, narration)
+    if sb.get("style") == "news":
+        from .news_video import render_still as still_news
+        return still_news(storyboard_path, t, out, narration)
     scenes, captions, sfx, narration_end, total = build_timeline(sb, PROJECT_ROOT)
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
     counters = {sc.counter: pill(sc.counter, 30, (20, 22, 35), HIGHLIGHT + (255,), weight="Bold")

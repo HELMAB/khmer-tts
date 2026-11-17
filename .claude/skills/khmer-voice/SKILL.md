@@ -165,3 +165,19 @@ the same storyboard works with any `read` output via `--narration`.
 
 Layout constants (card positions, caption height, colours, SFX levels) live at the top of
 `khmer_tts/video.py`. Change them there, not per video.
+
+### News style with article photos (`"style": "news"`)
+
+For a news article, prefer the broadcast style in `khmer_tts/news_video.py` (example: `videos/mercedes_rma_news.json`):
+full-bleed photos with Ken Burns motion and cross-fades, a channel bug, date and optional `disclosure` tag,
+key-fact chips, a lower third (red `tag`, white `title` bar, `subtitle` strip), captions, a scrolling `ticker`,
+a 3.2 s intro stinger before the narration and an outro card with `credits`. Scene fields: `line`, `tag`, `title`,
+`subtitle`, `images [[file, line], ...]` (from `images_dir`), `facts [[text, line], ...]`, `numbered`.
+Landscape photos are shown whole over a blurred fill; square ones fill the photo area.
+
+Getting a URL's text and photos: Thmey Thmey (and similar sites) sit behind Cloudflare, so curl gets a 403.
+Read the article through Chrome (claude-in-chrome). For photos, navigate the tab to the image host
+(e.g. `image.thmeythmey.com`) so fetches are same-origin, then bundle all images as base64 into ONE JSON download
+(Chrome blocks multiple automatic downloads), decode it from `~/Downloads` into `videos/images/<stem>/` and delete
+the download. Credit the source and photographer in `credits`; if the article is marked `អត្ថបទពាណិជ្ជកម្ម`
+(advertorial), set `disclosure` and tell the user.
