@@ -220,7 +220,7 @@ def line_timings(storyboard: dict, root: Path) -> tuple[list[tuple[float, float]
     return spans, t
 
 
-def build_card(brand: dict, items: list, y: int, at, sfx: list, height: int = CARD_H) -> list[Element]:
+def build_card(brand: dict, items: list, y: int, at, sfx: list, height: int = CARD_H, t_show: float | None = None) -> list[Element]:
     color = hex_rgb(brand["color"])
     card = Image.new("RGBA", (CONTENT_W, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(card)
@@ -232,7 +232,7 @@ def build_card(brand: dict, items: list, y: int, at, sfx: list, height: int = CA
     tag = pill(brand["tag"], 30, TEXT, color + (60,), outline=color)
     card.alpha_composite(tag, (card.width - tag.width - 34, 34))
 
-    t_card = at(items[0][1]) if items else 0
+    t_card = t_show if t_show is not None else at(items[0][1]) if items else 0  # compare cards: shown from the scene start
     elements = [Element(card, MARGIN, y, t_card)]
     sfx.append((t_card, "swish"))
 
@@ -479,7 +479,7 @@ def focus_ring(w: int, h: int) -> Image.Image:
 
 def build_media(media: dict, top: int, max_h: int, at, sfx: list, root: Path) -> tuple[list[Element], int]:
     """One window in the content column starting at `top`; returns its elements and its bottom edge.
-    kinds: browser {file, crop, url, focus, focus_line}, code/terminal {title, lines [[text, line], ...]}."""
+    kinds: browser {file, crop, url, focus, focus_line}, code/terminal {title, lines [[text, line], ...], min_h}."""
     t = at(media["line"])
     els: list[Element] = []
     if media["kind"] == "browser":
@@ -499,7 +499,8 @@ def build_media(media: dict, top: int, max_h: int, at, sfx: list, root: Path) ->
     else:
         size = media.get("size", 24)
         lines = [(code_line(text, size), line) for text, line in media["lines"]]
-        h = min(max_h, BAR_H + 34 + sum(img.height for img, _ in lines) + 20)
+        # min_h: as tall as a window it covers, so nothing underneath shows through
+        h = min(max_h, max(media.get("min_h", 0), BAR_H + 34 + sum(img.height for img, _ in lines) + 20))
         win = window_frame(CONTENT_W, h, media["title"])
         els.append(Element(shadow(win), MARGIN - SHADOW, top - SHADOW, t, dy=50))
         y = top + BAR_H + 26
@@ -582,8 +583,8 @@ def build_timeline(sb: dict, root: Path):
             verdict = s.get("verdict", False)
             els = build_header(s, t0, verdict)
             if kind == "compare":
-                els += build_card(sb["brands"]["a"], s["a"]["items"], CARD_A_Y, at, sfx)
-                els += build_card(sb["brands"]["b"], s["b"]["items"], CARD_B_Y, at, sfx)
+                els += build_card(sb["brands"]["a"], s["a"]["items"], CARD_A_Y, at, sfx, t_show=t0 + 0.2)
+                els += build_card(sb["brands"]["b"], s["b"]["items"], CARD_B_Y, at, sfx, t_show=t0 + 0.45)
             else:  # one tall card filling both card slots
                 brand = {"color": sb["brands"]["a"]["color"], **s["card"]}
                 els += build_card(brand, s["card"]["items"], CARD_A_Y, at, sfx, height=CARD_B_Y + CARD_H - CARD_A_Y)
