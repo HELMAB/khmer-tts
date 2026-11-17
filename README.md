@@ -34,6 +34,7 @@ The model (~2 GB) downloads from Hugging Face on first use.
 alias ktts='.venv-voxpocket/bin/python -m khmer_tts'
 
 ktts voices                                   # list voices
+ktts clips voices/rfi/source.mp3              # suggest 4-9 s reference clips between pauses
 ktts speak --voice rfi "សួស្តីបងប្អូនទាំងអស់គ្នា។"  # -> outputs/samples_rfi/
 ktts read  --voice rfi texts/article.txt      # -> outputs/article_rfi/article.wav (+ parts/)
 ktts vits  "សួស្តី"                             # baseline single-voice model, no cloning
@@ -48,6 +49,9 @@ ktts add-voice rfi recordings/rfi.mp3 --start 0 --duration 5 \
     --text "ជាមួយនឹងការរីកលូតលាស់យ៉ាងលឿនស្លេវនៃវិស័យបញ្ញាសិប្បនិម្មិត" \
     --transcript recordings/rfi.txt
 ```
+
+Add `--clean` for noisy or quiet recordings (70 Hz high-pass, light denoise, loudness
+normalisation). Skip it for already-clean audio: the model clones processing artefacts too.
 
 A wrong transcript is the most common cause of a poor clone.
 To find pauses: `ffmpeg -i in.mp3 -af silencedetect=noise=-30dB:d=0.18 -f null -`.
@@ -67,5 +71,6 @@ Each line is also saved to `parts/NN.wav`, so a bad line can be regenerated alon
 
 | name | source | reference clip |
 |------|--------|----------------|
-| `my`  | `voices/my/source.mp3` | first 6.9 s |
+| `preapsovath` | `voices/preapsovath/source.mp3` | first 6.9 s |
+| `preapsovath_clean` | same as `preapsovath`, with `--clean` | first 6.9 s |
 | `rfi` | RFI Khmer news report, `voices/rfi/source.mp3` (full transcript in `source.txt`) | 0–5 s |

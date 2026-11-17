@@ -1,6 +1,7 @@
 """Command-line interface: python -m khmer_tts <command> ...
 
     voices                                   list cloned voices
+    clips SOURCE                             suggest reference clips (speech between pauses)
     add-voice NAME SOURCE --text "..."       register a voice from a recording
     speak  --voice NAME "text" ["text" ...]  say a few sentences in a cloned voice
     read   --voice NAME texts/article.txt    read a whole prepared article
@@ -11,7 +12,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .voices import PROJECT_ROOT, Voice, add_voice, list_voices
+from .voices import PROJECT_ROOT, Voice, add_voice, list_voices, probe_duration, suggest_clips
 
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 
@@ -32,9 +33,20 @@ def cmd_voices(args) -> None:
     names = list_voices()
     if not names:
         print("No voices yet. Add one with: python -m khmer_tts add-voice NAME SOURCE --text '...'")
+    width = max(map(len, names), default=0)
     for name in names:
         v = Voice.load(name)
-        print(f"{name:<12} {v.duration:4.1f}s  {v.text}")
+        print(f"{name:<{width}}  {v.duration:4.1f}s  {v.text}")
+
+
+def cmd_clips(args) -> None:
+    source = Path(args.source)
+    clips = suggest_clips(source)
+    print(f"{source}: {probe_duration(source):.1f}s. Candidate reference clips (speech between pauses, 4-9 s):")
+    for start, dur in clips:
+        print(f"  --start {start:.2f} --duration {dur:.2f}")
+    if not clips:
+        print("  none found; pick a stretch by ear and pass --start/--duration yourself")
 
 
 def cmd_add_voice(args) -> None:
@@ -42,6 +54,7 @@ def cmd_add_voice(args) -> None:
     v = add_voice(
         args.name, Path(args.source), text, start=args.start, duration=args.duration,
         transcript=Path(args.transcript) if args.transcript else None, overwrite=args.overwrite,
+        clean=args.clean,
     )
     print(f"Added voice '{v.name}': {v.wav} ({v.duration:.1f}s)\n  text: {v.text}")
 
@@ -93,6 +106,10 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("voices", help="list cloned voices")
     p.set_defaults(func=cmd_voices)
 
+    p = sub.add_parser("clips", help="suggest 4-9 s clips between pauses for add-voice")
+    p.add_argument("source", help="audio file (mp3/wav/...)")
+    p.set_defaults(func=cmd_clips)
+
     p = sub.add_parser("add-voice", help="register a new voice from a recording")
     p.add_argument("name")
     p.add_argument("source", help="audio file (mp3/wav/...)")
@@ -103,6 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duration", type=float, default=6.0, help="clip length, 4-9 s works best (default 6)")
     p.add_argument("--transcript", help="full transcript of SOURCE, stored alongside for reference")
     p.add_argument("--overwrite", action="store_true")
+    p.add_argument("--clean", action="store_true",
+                   help="gentle cleanup: 70 Hz high-pass, light denoise, loudness normalise to -20 LUFS")
     p.set_defaults(func=cmd_add_voice)
 
     p = sub.add_parser("speak", help="say sentences in a cloned voice")

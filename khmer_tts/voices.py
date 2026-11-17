@@ -56,6 +56,56 @@ def probe_duration(path: Path) -> float:
     return float(out.stdout.strip())
 
 
+def find_pauses(source: Path, noise_db: float = -30, min_pause: float = 0.18) -> list[tuple[float, float]]:
+    """Return (start, end) seconds of silent gaps, i.e. good places to cut a reference clip."""
+    import re
+
+    out = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-i", str(source), "-af", f"silencedetect=noise={noise_db}dB:d={min_pause}",
+         "-f", "null", "-"],
+        check=True, capture_output=True, text=True,
+    ).stderr
+    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", out)]
+    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", out)]
+    return list(zip(starts, ends))
+
+
+def suggest_clips(source: Path, lo: float = 4.0, hi: float = 9.0) -> list[tuple[float, float]]:
+    """Speech stretches between pauses (or from the start) that are lo-hi seconds long: (start, duration)."""
+    pauses = find_pauses(source)
+    edges = [0.0] + [end for _, end in pauses]
+    stops = [start for start, _ in pauses] + [probe_duration(source)]
+    return [(a, round(b - a, 2)) for a, b in zip(edges, stops) if lo <= b - a <= hi]
+
+
+# Gentle on purpose: the model clones processing artefacts along with the voice.
+# No pitch/EQ/compression changes, so the speaker's timbre is left alone.
+CLEAN_HIGHPASS_HZ = 70           # rumble, handling noise, mains hum
+CLEAN_DENOISE = "afftdn=nr=10:nf=-50:tn=1"  # 10 dB reduction, adaptive noise tracking
+CLEAN_TARGET_LUFS = -20.0
+CLEAN_TRUE_PEAK = -2.0
+
+
+def clean_filters(source: Path, start: float, duration: float) -> list[str]:
+    """ffmpeg filters for --clean: high-pass, light denoise, then 2-pass linear loudness normalisation."""
+    import json
+
+    pre = [f"highpass=f={CLEAN_HIGHPASS_HZ}", CLEAN_DENOISE]
+    measure = subprocess.run(
+        ["ffmpeg", "-hide_banner", "-ss", f"{start}", "-t", f"{duration}", "-i", str(source), "-ac", "1",
+         "-af", ",".join(pre + [f"loudnorm=I={CLEAN_TARGET_LUFS}:TP={CLEAN_TRUE_PEAK}:print_format=json"]),
+         "-f", "null", "-"],
+        check=True, capture_output=True, text=True,
+    ).stderr
+    m = json.loads(measure[measure.rindex("{"):measure.rindex("}") + 1])
+    loudnorm = (
+        f"loudnorm=I={CLEAN_TARGET_LUFS}:TP={CLEAN_TRUE_PEAK}:linear=true"
+        f":measured_I={m['input_i']}:measured_TP={m['input_tp']}:measured_LRA={m['input_lra']}"
+        f":measured_thresh={m['input_thresh']}:offset={m['target_offset']}"
+    )
+    return pre + [loudnorm]
+
+
 def add_voice(
     name: str,
     source: Path,
@@ -64,8 +114,9 @@ def add_voice(
     duration: float = 6.0,
     transcript: Path | None = None,
     overwrite: bool = False,
+    clean: bool = False,
 ) -> Voice:
-    """Cut a reference clip from `source` and register it as voices/<name>/."""
+    """Cut a reference clip from `source` and register it as voices/<name>/ (optionally cleaned)."""
     if not MIN_SECONDS <= duration <= MAX_SECONDS:
         raise SystemExit(f"--duration should be {MIN_SECONDS:g}-{MAX_SECONDS:g} s (the model works best with 4-9 s)")
     folder = VOICES_DIR / name
@@ -74,10 +125,12 @@ def add_voice(
     folder.mkdir(parents=True, exist_ok=True)
 
     fade = min(0.15, duration / 10)
+    filters = [f"afade=t=out:st={duration - fade}:d={fade}"]
+    if clean:
+        filters = clean_filters(source, start, duration) + filters
     subprocess.run(
         ["ffmpeg", "-y", "-loglevel", "error", "-ss", f"{start}", "-t", f"{duration}", "-i", str(source),
-         "-ac", "1", "-ar", str(SAMPLE_RATE), "-af", f"afade=t=out:st={duration - fade}:d={fade}",
-         str(folder / REFERENCE_WAV)],
+         "-ac", "1", "-ar", str(SAMPLE_RATE), "-af", ",".join(filters), str(folder / REFERENCE_WAV)],
         check=True,
     )
     (folder / REFERENCE_TXT).write_text(text.replace("​", "").strip() + "\n", encoding="utf-8")
