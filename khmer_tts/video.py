@@ -45,6 +45,7 @@ CAPTION_CY = 1340
 BG_TOP, BG_BOTTOM = (8, 9, 15), (12, 14, 26)
 CARD_BG = (24, 28, 48, 235)
 TEXT, MUTED, HIGHLIGHT = (245, 246, 250), (160, 166, 190), (255, 210, 70)
+ACCENT_INK = (20, 22, 35)  # text drawn on the accent colour (badges, counters)
 ANIM = 0.4  # seconds for an element to slide/fade in
 SCENE_FADE = 0.3
 LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11"  # TikTok/Reels-level loudness
@@ -273,7 +274,7 @@ def build_header(scene: dict, t0: float, verdict: bool) -> list[Element]:
     else:
         badge = Image.new("RGBA", (110, 110), (0, 0, 0, 0))
         ImageDraw.Draw(badge).rounded_rectangle((0, 0, 109, 109), radius=28, fill=HIGHLIGHT)
-        t = text_image(num, 52, "Bold", (20, 22, 35), line_gap=1.2)
+        t = text_image(num, 52, "Bold", ACCENT_INK, line_gap=1.2)
         badge.alpha_composite(t, ((110 - t.width) // 2, (110 - t.height) // 2))
     title = text_image(scene["title"], 54, "Bold", TEXT, max_w=CONTENT_W - 140, align="left", line_gap=1.4)
     sub = text_image(scene["subtitle"], 32, "Medium", MUTED, max_w=CONTENT_W - 140, align="left", line_gap=1.3)
@@ -290,7 +291,7 @@ def build_title(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     a = text_image(brands["a"]["name"], 150, "Bold", a_col, line_gap=1.2)
     vs = Image.new("RGBA", (150, 150), (0, 0, 0, 0))
     ImageDraw.Draw(vs).ellipse((0, 0, 149, 149), fill=HIGHLIGHT)
-    vt = text_image("VS", 64, "Bold", (20, 22, 35), line_gap=1.2)
+    vt = text_image("VS", 64, "Bold", ACCENT_INK, line_gap=1.2)
     vs.alpha_composite(vt, ((150 - vt.width) // 2, (150 - vt.height) // 2))
     b = text_image(brands["b"]["name"], 130, "Bold", b_col, line_gap=1.2)
     els = [
@@ -377,18 +378,37 @@ def build_quote(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
 
 BAR_H, WIN_R = 54, 22
 WIN_BG, WIN_BAR = (16, 18, 27), (28, 31, 44)
+COMMENT = (110, 118, 140)  # comments are also set in italic
 CODE_COLORS = [  # first match wins; (pattern, colour)
-    (re.compile(r"^# .*"), (110, 118, 140)), (re.compile(r"^\$ "), (80, 220, 140)), (re.compile(r"^✓.*"), (80, 220, 140)),
-    (re.compile(r"<!--.*?-->"), (110, 118, 140)), (re.compile(r'"[^"]*"'), (152, 224, 136)),
-    (re.compile(r"</?[A-Za-z!][\w-]*|/?>"), (255, 121, 168)), (re.compile(r"\b[a-z-]+(?==)"), (120, 190, 255)),
+    (re.compile(r"^# .*"), COMMENT), (re.compile(r"^\$ "), (80, 220, 140)), (re.compile(r"^✓.*"), (80, 220, 140)),
+    (re.compile(r"<!--.*?-->"), COMMENT), (re.compile(r'"[^"]*"'), (152, 224, 136)),
+    (re.compile(r"</?[A-Za-z!][\w-]*|(?<![-=])/?>"), (255, 121, 168)), (re.compile(r"\b[a-z-]+(?==)"), (120, 190, 255)),
     (re.compile(r"\b(git|vercel|npm)\b"), (120, 190, 255)),
 ]
 
 
 @lru_cache(maxsize=None)
-def mono(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
+def mono(size: int, style: str = "Regular") -> ImageFont.FreeTypeFont:
+    """Code font: the first of MONO_FONTS that is installed (fc-match silently substitutes, so check the file)."""
+    for family, file_tag in MONO_FONTS:
+        out = subprocess.run(["fc-match", "-f", "%{file}", f"{family}:style={style}"], capture_output=True, text=True)
+        if file_tag in out.stdout:
+            return ImageFont.truetype(out.stdout.strip(), size, layout_engine=ImageFont.Layout.RAQM)
     out = subprocess.run(["fc-match", "-f", "%{file}", "Menlo"], capture_output=True, text=True)
-    return ImageFont.truetype(out.stdout.strip(), size, index=1 if bold else 0)
+    return ImageFont.truetype(out.stdout.strip(), size, index=1 if style == "Bold" else 0)
+
+
+MONO_FONTS = [("Dank Mono", "DankMono"), ("Fira Code", "FiraCode")]  # (family, file-name tag), in preference order
+SYMBOLS = "✓"  # missing from Dank Mono; drawn with Menlo instead
+
+
+@lru_cache(maxsize=None)
+def symbol_font(size: int) -> ImageFont.FreeTypeFont:
+    out = subprocess.run(["fc-match", "-f", "%{file}", "Menlo"], capture_output=True, text=True)
+    return ImageFont.truetype(out.stdout.strip(), size)
+
+
+LIGATURES = ["liga", "calt"]
 
 
 def window_frame(w: int, h: int, title: str, url: bool = False) -> Image.Image:
@@ -435,10 +455,16 @@ def code_line(text: str, size: int) -> Image.Image:
     for pat, col in reversed(CODE_COLORS):  # earlier patterns win, so paint them last
         for m in pat.finditer(text):
             colors[m.start():m.end()] = [col] * (m.end() - m.start())
-    x = 0.0
-    for ch, col in zip(text, colors):
-        d.text((x, img.height // 2), ch, font=f, fill=col, anchor="lm")
-        x += f.getlength(ch)
+    # draw runs of one colour together so the font's ligatures (->, &&, ...) can form inside them
+    x, i = 0.0, 0
+    while i < len(text):
+        j = i
+        while j < len(text) and colors[j] == colors[i] and (text[j] in SYMBOLS) == (text[i] in SYMBOLS):
+            j += 1
+        rf = symbol_font(size) if text[i] in SYMBOLS else mono(size, "Italic") if colors[i] == COMMENT else f
+        d.text((x, img.height // 2), text[i:j], font=rf, fill=colors[i], anchor="lm", features=LIGATURES)
+        x += rf.getlength(text[i:j], features=LIGATURES)
+        i = j
     return img
 
 
@@ -521,7 +547,17 @@ def build_step(scene: dict, brands: dict, at, sfx: list, root: Path) -> list[Ele
     return els
 
 
+def set_accent(sb: dict) -> None:
+    """Storyboard "accent" (hex, e.g. a brand colour) replaces the yellow highlight everywhere;
+    badge text turns white on dark accents."""
+    global HIGHLIGHT, ACCENT_INK
+    HIGHLIGHT = hex_rgb(sb["accent"]) if sb.get("accent") else (255, 210, 70)
+    lum = (0.299 * HIGHLIGHT[0] + 0.587 * HIGHLIGHT[1] + 0.114 * HIGHLIGHT[2]) / 255
+    ACCENT_INK = (20, 22, 35) if lum > 0.6 else (255, 255, 255)
+
+
 def build_timeline(sb: dict, root: Path):
+    set_accent(sb)
     spans, narration_end = line_timings(sb, root)
     at = lambda line: spans[line - 1][0]  # noqa: E731
     sfx: list[tuple[float, str]] = []
@@ -751,7 +787,7 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
     if seconds:
         total = min(total, seconds)
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
-    counters = {sc.counter: pill(sc.counter, 30, (20, 22, 35), HIGHLIGHT + (255,), weight="Bold")
+    counters = {sc.counter: pill(sc.counter, 30, ACCENT_INK, HIGHLIGHT + (255,), weight="Bold")
                 for sc in scenes if sc.counter}
     _STATE.update(bg=make_background(hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])), badge=badge, counters=counters, scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)
@@ -789,7 +825,7 @@ def render_still(storyboard_path: Path, t: float, out: Path, narration: str | No
         return still_news(storyboard_path, t, out, narration)
     scenes, captions, sfx, narration_end, total = build_timeline(sb, PROJECT_ROOT)
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
-    counters = {sc.counter: pill(sc.counter, 30, (20, 22, 35), HIGHLIGHT + (255,), weight="Bold")
+    counters = {sc.counter: pill(sc.counter, 30, ACCENT_INK, HIGHLIGHT + (255,), weight="Bold")
                 for sc in scenes if sc.counter}
     _STATE.update(bg=make_background(hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])), badge=badge, counters=counters, scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)

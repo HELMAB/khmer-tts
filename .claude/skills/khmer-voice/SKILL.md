@@ -52,7 +52,11 @@ so end each sentence's last line with `។`.
 - Expand the repeat sign: ថ្មីៗ → ថ្មីថ្មី, សំខាន់ៗ → សំខាន់សំខាន់.
 - Remove `« » " ( )`, bullets `•`, `៖` (turn a heading with `៖` into its own line ending in `។`),
   zero-width spaces (U+200B), and Latin glosses in brackets such as `(Emmanuel Macron)`.
-- Abbreviations and foreign words: write them as they should be pronounced in Khmer.
+- Abbreviations and foreign words: write them as they should be pronounced in Khmer, **except the topic's
+  core keywords and product names, which stay in Latin script** (the user asked: "Git", "branch",
+  "Branching", "GitHub", "GitLab", "Bitbucket" stay English, never "ហ្គីត" / "ប្រេន" / "ហ្គីតហាប់"; treat
+  other core technical terms and product/brand names of the topic the same way). VoxPocket
+  reads a short Latin word like `Git` fine (line lengths stay the same); check durations after.
 - Fix obvious typos only if the meaning is clear, and tell the user about each one.
 
 ### Redoing a bad line
@@ -142,6 +146,9 @@ the same storyboard works with any `read` output via `--narration`.
 
 1. **Storyboard** `videos/<stem>.json` (copy the structure of `videos/laravel_spring_boot.json`):
    - `tts_text`, `narration`, `output` (`outputs/video_<stem>/tiktok.mp4`), `title` (top badge).
+   - `accent`: theme the video in the subject's brand colour (e.g. Git `#F05032`, Vercel `#0070F3`): it replaces
+     the yellow on badges, counters, kicker, caption highlights and focus rings (badge text turns white on dark
+     accents). Set `brands.a`/`b` colours to the same family so chips and background glows match.
    - `captions`: **exactly one per line of the TTS file, same order** (the renderer refuses a mismatch).
      Write them in the original's display spelling: English terms back in Latin script, digits as in
      the original, no trailing `។`. The TTS file is for the ear; captions are for the eye.
@@ -170,6 +177,11 @@ the same storyboard works with any `read` output via `--narration`.
        - `{"kind": "code"|"terminal", "title", "line", "size", "lines": [[text, line], ...]}`: a code editor or
          terminal; each code line appears when its narration line is spoken (HTML, `$` prompts, `#` comments
          and `✓` output are coloured). Size 30 for ~9 short lines, 26 for ~7 lines up to ~45 chars.
+         Font: Dank Mono (user-installed, commercial; comments in its cursive italic), then Fira Code
+         (`brew install --cask font-fira-code`), then Menlo — first installed in `MONO_FONTS` wins, with
+         ligatures. Glyphs Dank Mono lacks (`✓`, listed in `SYMBOLS`) are drawn with Menlo; if a still shows an
+         empty box in a code line, add that character to `SYMBOLS`. Show the first command when the scene
+         starts so the window is never empty for long.
        A `headline` can also take `media` (placed at `media_y`, default 720, filling the space down to the captions).
      Pick by content: two-sided comparison → `title` + `compare`; news/report → `headline` +
      `points` + `quote` for direct speech (see `videos/news.json`); step-by-step tutorial → `headline` with a
