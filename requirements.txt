@@ -1,0 +1,8 @@
+# Python 3.12, CUDA 12.8 build of torch. Also needs ffmpeg/ffprobe on PATH.
+voxcpm==2.0.3
+torch==2.11.0
+torchaudio
+transformers
+huggingface_hub
+soundfile
+numpy
