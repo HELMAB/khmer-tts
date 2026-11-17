@@ -1,9 +1,9 @@
 ---
 name: khmer-voice
-description: Generate Khmer speech in a cloned voice, or add (clone) a new voice from a recording, in the khmer-tts project. Use when the user asks to read, speak, voice, narrate or generate audio for Khmer text or a text file "using/with <voice>", to clone a voice from an mp3/wav, to add or list voices, or to regenerate a bad line of a generated article.
+description: Generate Khmer speech in a cloned voice, add (clone) a new voice from a recording, or turn a narrated text into a TikTok/Reels/Shorts explainer video, in the khmer-tts project. Use when the user asks to read, speak, voice, narrate or generate audio for Khmer text or a text file "using/with <voice>", to clone a voice from an mp3/wav, to add or list voices, to regenerate a bad line, or to make a vertical/TikTok video (captions, overlays, sound effects) from a text or narration.
 ---
 
-# Khmer voice: generate audio and clone voices
+# Khmer voice: generate audio, clone voices, make TikTok videos
 
 Everything runs through the project CLI, from the project root:
 
@@ -14,6 +14,7 @@ $KT clips SOURCE                # suggest 4-9 s clips between pauses
 $KT add-voice NAME SOURCE --start S --duration D --text "..." [--transcript FILE] [--clean] [--overwrite]
 $KT speak --voice NAME "line" ["line" ...] [--out-dir DIR] [--prefix P] [--seed N]
 $KT read  --voice NAME FILE.txt [--out-dir DIR]
+$KT video videos/STORY.json [--narration DIR] [-o OUT.mp4] [--still SEC ...] [--seconds N]
 ```
 
 Model loading takes ~10 s; generation runs at roughly 2 s of compute per 1 s of audio on the
@@ -103,3 +104,53 @@ A wrong transcript is the main cause of a bad clone.
 7. Tell the user how the clip's words were matched, and that if the clip doesn't end exactly
    on the last word, they should fix `voices/NAME/reference.txt` (or ask you to try another clip).
    Add the voice to the Voices table in README.md.
+
+## C. Make a TikTok explainer video
+
+`$KT video` renders a 1080×1920, 30 fps MP4 from a narration (a `read` output folder: `article.wav` +
+`parts/NN.wav`) and a storyboard JSON. It already handles the following:
+- **Timing:** taken from `parts/`, so captions and on-screen items are in sync with no alignment step.
+- **Animation:** cards and labels slide and pop in, and scenes fade into each other.
+- **Captions:** English terms are highlighted, short runs of Latin words never break across lines, and Khmer is wrapped without splitting letter stacks.
+- **Overlays:** a series badge, a section counter (`01 / 04`) and a progress bar, kept clear of TikTok's UI. TikTok covers about the top 150 px, bottom 400 px and right 130 px.
+- **Sound effects:** synthesized, so there are no licensing issues: a whoosh at each scene, a swish for each card, a pop for each label, and a ding for each verdict and the outro.
+- **Loudness:** normalized for social platforms. Font: Google Sans (it covers Khmer).
+
+Inputs the user gives: the original text, the TTS text, the narration (or a voice to narrate with).
+If any is missing, produce it first with section A. The narration's voice is a separate choice:
+the same storyboard works with any `read` output via `--narration`.
+
+1. **Storyboard** `videos/<stem>.json` (copy the structure of `videos/laravel_spring_boot.json`):
+   - `tts_text`, `narration`, `output` (`outputs/video_<stem>/tiktok.mp4`), `title` (top badge).
+   - `captions`: **exactly one per line of the TTS file, same order** (the renderer refuses a mismatch).
+     Write them in the original's display spelling: English terms back in Latin script, digits as in
+     the original, no trailing `។`. The TTS file is for the ear; captions are for the eye.
+   - `brands.a` / `brands.b`: `name`, `color` (hex), `tag` (short label shown on the card).
+     For a non-comparison topic, still use two cards (e.g. "Pros"/"Cons", "Before"/"After").
+   - `scenes`, each starting at a 1-based TTS `line` (a scene lasts until the next one starts):
+     - `title`: big a VS b intro; optional `subtitle {line, text}` and `topics {line, items[]}` (≤ 4 short items).
+     - `compare`: header `number` ("01"…), `title` (Khmer), `subtitle` (English); cards
+       `a`/`b` = `{line, items: [[text, line], ...]}`. Each item pops in when its line is spoken.
+       Keep items to short key phrases (≤ ~22 chars), ≤ 6 per card; chips shrink to fit two-three rows.
+     - Conclusion: a `compare` with `"number": "✓", "verdict": true`; mark the winning item
+       `[text, line, "strong"]` (filled chip + check, plays a ding).
+   - `outro`: `{seconds, text, subtitle}` shown after the narration (e.g. "តាមដានសម្រាប់មេរៀនបន្ថែម" / "Follow for more").
+   Put scene starts on the line that introduces the section (e.g. "ចំណុចទីមួយ…"), and each card's
+   first item on the line that names that brand, so visuals land on the words.
+2. **Preview before rendering:** `$KT video videos/<stem>.json --still 2 20 45 …` (one time per scene,
+   plus a crowded moment near each scene's end) → `outputs/stills/`. Join them and look:
+   `ffmpeg -i a.png -i b.png … -filter_complex "hstack=N,scale=2400:-1" contact.png`, then Read it.
+   Check: nothing overflows a card or overlaps the caption box, no names split across caption lines,
+   Khmer renders with correct stacks, check marks visible.
+3. **Render:** `$KT video videos/<stem>.json` (about 1.5-2 min for 2.5 min of video; use a 600000 ms timeout).
+   For another voice: `--narration outputs/<stem>_<voice> -o outputs/video_<stem>/tiktok_<voice>.mp4`.
+4. **Verify the real file:** grab 2-4 frames mid-animation from the MP4
+   (`ffmpeg -ss T -i out.mp4 -frames:v 1 f.png`) and Read them. Measure loudness
+   (`ffmpeg -i out.mp4 -af ebur128=framelog=quiet:peak=true -f null - 2>&1 | grep -E "^ +(I|Peak):"`):
+   about -14 to -17 LUFS is fine.
+5. **Report:** path, duration, size, what each scene shows, how captions differ from the TTS text, and
+   that the user should watch it before posting (you cannot hear or watch it). Offer background music
+   only from a track the user has rights to; never add music yourself.
+
+Layout constants (card positions, caption height, colours, SFX levels) live at the top of
+`khmer_tts/video.py`. Change them there, not per video.
