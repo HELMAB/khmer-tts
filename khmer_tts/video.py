@@ -30,14 +30,16 @@ from .article import SENTENCE_ENDINGS, read_lines
 from .voices import PROJECT_ROOT
 
 W, H, FPS = 1080, 1920, 30
-MARGIN = 70
 SHORT_PAUSE, LONG_PAUSE = 0.25, 0.6  # must match article.read_article defaults
 
 # TikTok's UI, measured on an iPhone 14 Pro Max (19.5:9): the video is scaled to fill the height, cropping
 # ~55 px off each side; the status + search bar cover the top ~225 px, the button rail covers x > ~905 for
 # y ~900-1610, and the username/description cover everything below ~1620.
 CROP_X, SAFE_TOP, RAIL_X, SAFE_BOTTOM = 55, 240, 880, 1600
-HEADER_Y, CARD_A_Y, CARD_B_Y, CARD_H = 250, 470, 850, 350
+# explainer content column: inside the side crop, left of the button rail; centred items use its centre CX
+MARGIN, CONTENT_R = CROP_X + 45, RAIL_X
+CONTENT_W, CX = CONTENT_R - MARGIN, (MARGIN + CONTENT_R) // 2
+HEADER_Y, CARD_A_Y, CARD_B_Y, CARD_H = 330, 480, 850, 350
 CAPTION_CY, PROGRESS_Y = 1340, 1480
 
 BG_TOP, BG_BOTTOM = (11, 14, 26), (20, 24, 48)
@@ -140,7 +142,7 @@ def wrap(text: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[list[str]]:
     return lines
 
 
-def text_image(text: str, size: int, weight="Regular", color=TEXT, max_w=W - 2 * MARGIN,
+def text_image(text: str, size: int, weight="Regular", color=TEXT, max_w=CONTENT_W,
                highlight=None, align="center", line_gap=1.55) -> Image.Image:
     """Render (wrapped) text to a tight RGBA image. Latin tokens get `highlight` colour if given."""
     f = font(size, weight)
@@ -219,7 +221,7 @@ def line_timings(storyboard: dict, root: Path) -> tuple[list[tuple[float, float]
 
 def build_card(brand: dict, items: list, y: int, at, sfx: list, height: int = CARD_H) -> list[Element]:
     color = hex_rgb(brand["color"])
-    card = Image.new("RGBA", (W - 2 * MARGIN, height), (0, 0, 0, 0))
+    card = Image.new("RGBA", (CONTENT_W, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(card)
     d.rounded_rectangle((0, 0, card.width - 1, height - 1), radius=36, fill=CARD_BG,
                         outline=color + (110,), width=3)
@@ -273,8 +275,8 @@ def build_header(scene: dict, t0: float, verdict: bool) -> list[Element]:
         ImageDraw.Draw(badge).rounded_rectangle((0, 0, 109, 109), radius=28, fill=HIGHLIGHT)
         t = text_image(num, 52, "Bold", (20, 22, 35), line_gap=1.2)
         badge.alpha_composite(t, ((110 - t.width) // 2, (110 - t.height) // 2))
-    title = text_image(scene["title"], 54, "Bold", TEXT, max_w=W - 2 * MARGIN - 140, align="left", line_gap=1.4)
-    sub = text_image(scene["subtitle"], 32, "Medium", MUTED, max_w=W - 2 * MARGIN - 140, align="left", line_gap=1.3)
+    title = text_image(scene["title"], 54, "Bold", TEXT, max_w=CONTENT_W - 140, align="left", line_gap=1.4)
+    sub = text_image(scene["subtitle"], 32, "Medium", MUTED, max_w=CONTENT_W - 140, align="left", line_gap=1.3)
     return [
         Element(badge, MARGIN, HEADER_Y + 20, t0, dy=0, scale_in=True),
         Element(title, MARGIN + 136, HEADER_Y - 4, t0 + 0.08),
@@ -292,27 +294,27 @@ def build_title(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     vs.alpha_composite(vt, ((150 - vt.width) // 2, (150 - vt.height) // 2))
     b = text_image(brands["b"]["name"], 130, "Bold", b_col, line_gap=1.2)
     els = [
-        Element(a, (W - a.width) // 2, 330, t0),
-        Element(vs, (W - 150) // 2, 560, t0 + 0.35, dy=0, scale_in=True),
-        Element(b, (W - b.width) // 2, 730, t0 + 0.6),
+        Element(a, CX - a.width // 2, 330, t0),
+        Element(vs, CX - 75, 560, t0 + 0.35, dy=0, scale_in=True),
+        Element(b, CX - b.width // 2, 730, t0 + 0.6),
     ]
     sfx += [(t0, "whoosh"), (t0 + 0.35, "pop"), (t0 + 0.6, "swish")]
     if sub := scene.get("subtitle"):
         s = text_image(sub["text"], 50, "Medium", TEXT, highlight=HIGHLIGHT)
-        els.append(Element(s, (W - s.width) // 2, 960, at(sub["line"])))
+        els.append(Element(s, CX - s.width // 2, 960, at(sub["line"])))
     if topics := scene.get("topics"):
         t = at(topics["line"])
         chips = [pill(f"{i}. {x}", 34, TEXT, (255, 255, 255, 22), outline=HIGHLIGHT + (160,))
                  for i, x in enumerate(topics["items"], 1)]
         rows, row = [], []
         for c in chips:  # two rows max, centred
-            if row and sum(r.width + 16 for r in row) + c.width > W - 2 * MARGIN:
+            if row and sum(r.width + 16 for r in row) + c.width > CONTENT_W:
                 rows.append(row)
                 row = []
             row.append(c)
         rows.append(row)
         for r_i, r in enumerate(rows):
-            x = (W - (sum(c.width for c in r) + 16 * (len(r) - 1))) // 2
+            x = CX - (sum(c.width for c in r) + 16 * (len(r) - 1)) // 2
             for c in r:
                 els.append(Element(c, x, 1070 + r_i * 86, t, dy=20, scale_in=True))
                 sfx.append((t, "pop"))
@@ -327,9 +329,9 @@ def build_headline(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     accent = hex_rgb(brands["b"]["color"])
     kicker = pill(scene["kicker"], 34, (255, 255, 255), accent + (255,), weight="Bold")
     head = text_image(scene["headline"], 84, "Bold", TEXT, align="left", highlight=HIGHLIGHT, line_gap=1.45)
-    els = [Element(kicker, MARGIN, 300, t0, dy=0, scale_in=True), Element(head, MARGIN, 300 + kicker.height + 24, t0 + 0.15)]
+    els = [Element(kicker, MARGIN, 330, t0, dy=0, scale_in=True), Element(head, MARGIN, 330 + kicker.height + 24, t0 + 0.15)]
     sfx += [(t0, "whoosh"), (t0 + 0.15, "swish")]
-    y = 300 + kicker.height + 24 + head.height + 16
+    y = 330 + kicker.height + 24 + head.height + 16
     if sub := scene.get("subtitle"):
         s = text_image(sub["text"], 48, "Medium", HIGHLIGHT, align="left")
         els.append(Element(s, MARGIN, y, at(sub["line"])))
@@ -338,7 +340,7 @@ def build_headline(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     color = hex_rgb(brands["a"]["color"])
     for i, (text, line) in enumerate(scene.get("points", []), 1):
         num = pill(str(i), 34, (255, 255, 255), color + (255,), weight="Bold", pad_x=22)
-        txt = text_image(text, 42, "Medium", TEXT, align="left", max_w=W - 2 * MARGIN - num.width - 24, line_gap=1.35)
+        txt = text_image(text, 42, "Medium", TEXT, align="left", max_w=CONTENT_W - num.width - 24, line_gap=1.35)
         row = Image.new("RGBA", (num.width + 20 + txt.width, max(num.height, txt.height)), (0, 0, 0, 0))
         row.alpha_composite(num, (0, (row.height - num.height) // 2))
         row.alpha_composite(txt, (num.width + 20, (row.height - txt.height) // 2))
@@ -353,11 +355,11 @@ def build_quote(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     t0 = at(scene["line"])
     color = hex_rgb(brands["b"]["color"])
     mark = text_image("\u201c", 220, "Bold", color, line_gap=1.0)
-    els = [Element(mark, MARGIN - 6, 230, t0, dy=0, scale_in=True)]
+    els = [Element(mark, MARGIN - 6, 300, t0, dy=0, scale_in=True)]
     sfx.append((t0, "whoosh"))
-    bar_top, y = 470, 470
+    bar_top, y = 540, 540
     for text, line in scene["phrases"]:
-        ph = text_image(text, 52, "Bold", TEXT, align="left", max_w=W - 2 * MARGIN - 50, line_gap=1.45)
+        ph = text_image(text, 52, "Bold", TEXT, align="left", max_w=CONTENT_W - 50, line_gap=1.45)
         els.append(Element(ph, MARGIN + 44, y, at(line), dy=20))
         y += ph.height + 4
     bar = Image.new("RGBA", (10, y - bar_top), color + (255,))
@@ -410,15 +412,15 @@ def build_timeline(sb: dict, root: Path):
         sub = text_image(outro["subtitle"], 40, "Medium", HIGHLIGHT)
         heart = check_icon(150, HIGHLIGHT + (255,))
         scenes.append(Scene(t0, total + 1, [
-            Element(heart, (W - 150) // 2, 560, t0, dy=0, scale_in=True),
-            Element(big, (W - big.width) // 2, 760, t0 + 0.15),
-            Element(sub, (W - sub.width) // 2, 760 + big.height + 10, t0 + 0.3),
+            Element(heart, CX - 75, 560, t0, dy=0, scale_in=True),
+            Element(big, CX - big.width // 2, 760, t0 + 0.15),
+            Element(sub, CX - sub.width // 2, 760 + big.height + 10, t0 + 0.3),
         ]))
         sfx += [(t0, "whoosh"), (t0 + 0.15, "ding")]
 
     captions = [
         (s, (spans[i + 1][0] if i + 1 < len(spans) else narration_end),
-         text_image(c, 50, "Bold", TEXT, max_w=W - 2 * MARGIN - 60, highlight=HIGHLIGHT, line_gap=1.5))
+         text_image(c, 50, "Bold", TEXT, max_w=CONTENT_W - 60, highlight=HIGHLIGHT, line_gap=1.5))
         for i, (c, (s, _)) in enumerate(zip(sb["captions"], spans))
     ]
     return scenes, captions, sfx, narration_end, total
@@ -492,7 +494,7 @@ def render_frame(n: int) -> bytes:
     frame = st["bg"].crop((ox, oy, ox + W, oy + H))
 
     # top overlay: series badge + section counter
-    frame.alpha_composite(st["badge"], (MARGIN, 150))
+    frame.alpha_composite(st["badge"], (MARGIN, SAFE_TOP))
     show_captions = True
     for sc in st["scenes"]:
         if sc.start - 0.001 <= t < sc.end:
@@ -501,25 +503,25 @@ def render_frame(n: int) -> bytes:
                 paste(frame, el, t, fade_out)
             show_captions = show_captions and sc.captions
             if sc.counter:
-                frame.alpha_composite(st["counters"][sc.counter], (W - MARGIN - st["counters"][sc.counter].width, 150))
+                frame.alpha_composite(st["counters"][sc.counter], (CONTENT_R - st["counters"][sc.counter].width, SAFE_TOP))
 
     # caption box
     for start, end, img in st["captions"] if show_captions else ():
         if start <= t < end:
             a = min(1.0, (t - start) / 0.12)
-            box_w, box_h = W - 2 * MARGIN, img.height + 40
+            box_w, box_h = CONTENT_W, img.height + 40
             box = st["caption_boxes"].setdefault(box_h, _caption_box(box_w, box_h))
             y = CAPTION_CY - box_h // 2
             frame.alpha_composite(with_alpha(box, a), (MARGIN, y))
-            frame.alpha_composite(with_alpha(img, a), ((W - img.width) // 2, y + 20))
+            frame.alpha_composite(with_alpha(img, a), (CX - img.width // 2, y + 20))
             break
 
     # progress bar
     d = ImageDraw.Draw(frame)
     p = min(1.0, t / st["total"])
-    d.rounded_rectangle((MARGIN, PROGRESS_Y, W - MARGIN, PROGRESS_Y + 8), radius=4, fill=(255, 255, 255, 40))
+    d.rounded_rectangle((MARGIN, PROGRESS_Y, CONTENT_R, PROGRESS_Y + 8), radius=4, fill=(255, 255, 255, 40))
     if p > 0.005:
-        d.rounded_rectangle((MARGIN, PROGRESS_Y, MARGIN + int((W - 2 * MARGIN) * p), PROGRESS_Y + 8),
+        d.rounded_rectangle((MARGIN, PROGRESS_Y, MARGIN + int((CONTENT_W) * p), PROGRESS_Y + 8),
                             radius=4, fill=HIGHLIGHT)
     return frame.convert("RGB").tobytes()
 

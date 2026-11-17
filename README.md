@@ -92,3 +92,4 @@ The storyboard JSON (`videos/*.json`) holds one caption per TTS line plus scenes
 | `preapsovath` | `voices/preapsovath/source.mp3` | first 6.9 s |
 | `preapsovath_clean` | same as `preapsovath`, with `--clean` | first 6.9 s |
 | `rfi` | RFI Khmer news report, `voices/rfi/source.mp3` (full transcript in `source.txt`) | 0–5 s |
+| `general` | devdrunk TikTok (React vs Vue), `voices/general/source.mp3` | 0–6.6 s |
