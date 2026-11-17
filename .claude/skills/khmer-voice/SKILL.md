@@ -117,7 +117,14 @@ A wrong transcript is the main cause of a bad clone.
    - Noise floor above about -55 dB, or loudness below about -25 LUFS → use `--clean`
      (e.g. `preapsovath`: -48 dB / -29 LUFS gave quieter-sounding, inconsistent clones; cleaned output came out 6-12 dB louder and steadier).
    - Clean broadcast audio (e.g. `rfi`: -69 dB / -15 LUFS) → skip it; cleaning only risks artefacts.
-   - Background music under speech: `--clean` won't remove it; tell the user it needs vocal separation (e.g. Demucs) first.
+   - Background music under speech: `--clean` won't remove it. Signs: few pauses found, and the 100 ms RMS
+     between words stays within ~10 dB of the speech (e.g. `advice`: -33..-44 dB floor vs -29 LUFS speech).
+     Ask the user, then separate the voice with Demucs (installed in the venv; ~80 MB model on first use):
+     `.venv-voxpocket/bin/python -m demucs --two-stems=vocals -n htdemucs -d cpu -o <scratchpad>/demucs SOURCE`
+     (~8 s for 40 s of audio; copy the source to an ASCII file name first). Check `no_vocals.wav` is loud
+     (confirms the music) and `vocals.wav` drops to about -80 dB between words, then `add-voice` from
+     `vocals.wav` (usually with `--clean`, separated vocals come out quiet) and keep the original as
+     `voices/NAME/original_with_music.<ext>`.
    Never pitch-shift, EQ, compress or "enhance" a reference: the model clones those artefacts as part of the voice.
    When unsure, add both `NAME` and `NAME_clean` and let the user compare by ear.
 5. `$KT add-voice NAME SOURCE --start S --duration D --text "WORDS" --transcript FULL.txt [--clean]`
@@ -166,7 +173,11 @@ the same storyboard works with any `read` output via `--narration`.
      - `points` (one-sided topics, e.g. news): header like `compare` plus one tall card
        `card: {name, tag, items: [[text, line], ...]}` (fits ~11 short items).
      - `quote`: `phrases: [[text, line], ...]` revealed as spoken, `by: {name, role, line}`.
-       Hides the caption box (the quote is already on screen).
+       Hides the caption box (the quote is already on screen). Optional `photo: {file, crop}` puts the speaker's
+       portrait (square, rounded, accent ring) with name/role as a header and the quote below; `size` sets the
+       quote text (default 52; 44-46 for 4 long phrases or verse). Follow each quote with a short `headline`
+       "lesson" scene (kicker "មេរៀនទី N", 1-2 `points`) for lines that explain it, so those lines get captions.
+       Example: `videos/khmer_advice.json` (portraits cropped from the user's image).
      - `step` (tutorials / how-to): header like `compare` (`number`, `title`, `subtitle`), a large window
        `media` (one object, or a list where each later window covers the previous one at its `line`), and a row
        of chips `items: [[text, line(, "strong")], ...]`. Keep chips to **one row (~3 short ones)**; a second
@@ -224,8 +235,16 @@ the same storyboard works with any `read` output via `--narration`.
    (`ffmpeg -i out.mp4 -af ebur128=framelog=quiet:peak=true -f null - 2>&1 | grep -E "^ +(I|Peak):"`):
    about -14 to -17 LUFS is fine.
 5. **Report:** path, duration, size, what each scene shows, how captions differ from the TTS text, and
-   that the user should watch it before posting (you cannot hear or watch it). Offer background music
-   only from a track the user has rights to; never add music yourself.
+   that the user should watch it before posting (you cannot hear or watch it).
+
+**Background music** (storyboard `music`, mixed in `khmer_tts/music.py`, ducked under the voice):
+- `{"synth": "ambient", "seed": 3, "level_db": -26, "duck_db": 7}`: an original synthesized bed (A minor
+  pentatonic pads, drone, roneat-like mallet motif, reverb), so there are no licensing issues; change `seed` for
+  a different motif. Sits ~13 dB under the voice while it speaks and swells in pauses and the outro.
+- `{"file": "path.mp3", "level_db": -26, "duck_db": 7}`: a track the user has rights to (looped if short).
+Ask which the user wants; never pick copyrighted music, a TikTok sound, or music separated from someone
+else's recording on your own. Explainer style only (the news renderer has no music bed yet).
+Example: `videos/khmer_advice.json`.
 
 Layout constants (card positions, caption height, colours, SFX levels) live at the top of
 `khmer_tts/video.py`. Change them there, not per video. The look: near-black background with a fading

@@ -351,21 +351,56 @@ def build_headline(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     return els
 
 
-def build_quote(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
-    """A direct quote revealed phrase by phrase, then the attribution."""
+def portrait(path: Path, crop, size: int, ring) -> Image.Image:
+    """Square photo with rounded corners, an accent ring and a soft shadow (small sources are upscaled)."""
+    src = Image.open(path).convert("RGB")
+    if crop:
+        src = src.crop(tuple(crop))
+    side = min(src.size)
+    src = src.crop(((src.width - side) // 2, (src.height - side) // 2, (src.width + side) // 2, (src.height + side) // 2))
+    src = src.resize((size, size), Image.LANCZOS).filter(ImageFilter.UnsharpMask(2, 60, 2))
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, size - 1, size - 1), radius=size // 6, fill=255)
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    img.paste(src, (0, 0), mask)
+    ImageDraw.Draw(img).rounded_rectangle((0, 0, size - 1, size - 1), radius=size // 6, outline=ring + (255,), width=6)
+    return shadow(img)
+
+
+PHOTO_Y = 330  # quote portrait header, below the series badge
+
+
+def build_quote(scene: dict, brands: dict, at, sfx: list, root: Path = PROJECT_ROOT) -> list[Element]:
+    """A direct quote revealed phrase by phrase, then the attribution. With `photo` ({file, crop}), the speaker's
+    portrait and name open the scene as a header and the quote sits below it."""
     t0 = at(scene["line"])
     color = hex_rgb(brands["b"]["color"])
-    mark = text_image("\u201c", 220, "Bold", color, line_gap=1.0)
-    els = [Element(mark, MARGIN - 6, 300, t0, dy=0, scale_in=True)]
+    who = scene.get("by")
+    els: list[Element] = []
+    top = 300
+    if photo := scene.get("photo"):
+        pic = portrait(root / photo["file"], photo.get("crop"), 230, HIGHLIGHT)
+        els.append(Element(pic, MARGIN - SHADOW, PHOTO_Y - SHADOW, t0, dy=0, scale_in=True))
+        if who:
+            nx, w = MARGIN + 260, CONTENT_R - MARGIN - 260
+            name = text_image(who["name"], 42, "Bold", HIGHLIGHT, align="left", max_w=w, line_gap=1.35)
+            role = text_image(who["role"], 30, "Medium", MUTED, align="left", max_w=w, line_gap=1.3)
+            ny = PHOTO_Y + (230 - name.height - role.height) // 2
+            els += [Element(name, nx, ny, t0 + 0.15), Element(role, nx, ny + name.height, t0 + 0.25)]
+        top, who = PHOTO_Y + 260, None
+    mark = text_image("\u201c", 220 if not photo else 160, "Bold", color, line_gap=1.0)
+    els.append(Element(mark, MARGIN - 6, top, t0, dy=0, scale_in=True))
     sfx.append((t0, "whoosh"))
-    bar_top, y = 540, 540
+    bar_top = y = top + (240 if not photo else 150)
+    size = scene.get("size", 52)
     for text, line in scene["phrases"]:
-        ph = text_image(text, 52, "Bold", TEXT, align="left", max_w=CONTENT_W - 50, line_gap=1.45)
+        ph = text_image(text, size, "Bold", TEXT, align="left", max_w=CONTENT_W - 50, line_gap=1.45)
         els.append(Element(ph, MARGIN + 44, y, at(line), dy=20))
         y += ph.height + 4
     bar = Image.new("RGBA", (10, y - bar_top), color + (255,))
-    els.insert(1, Element(bar, MARGIN, bar_top, t0, dy=0))
-    if who := scene.get("by"):
+    t_bar = at(scene["phrases"][0][1]) if scene["phrases"] else t0  # the bar arrives with the first phrase
+    els.insert(len(els) - len(scene["phrases"]), Element(bar, MARGIN, bar_top, t_bar, dy=0))
+    if who:
         name = text_image(who["name"], 44, "Bold", color, align="left", line_gap=1.3)
         role = text_image(who["role"], 34, "Medium", MUTED, align="left", line_gap=1.3)
         t = at(who["line"])
@@ -578,7 +613,7 @@ def build_timeline(sb: dict, root: Path):
             els = build_step(s, sb["brands"], at, sfx, root)
             counter = f"{s['number']} / {compare_total:02d}"
         elif kind == "quote":
-            els = build_quote(s, sb["brands"], at, sfx)
+            els = build_quote(s, sb["brands"], at, sfx, root)
         elif kind in ("compare", "points"):
             verdict = s.get("verdict", False)
             els = build_header(s, t0, verdict)
@@ -746,10 +781,14 @@ def synth_sfx(kind: str, sr: int) -> np.ndarray:
     return (0.5 if kind == "whoosh" else 0.25) * out * env / (np.abs(out).max() + 1e-9)
 
 
-def mix_audio(narration: Path, sfx: list, total: float, out: Path, sfx_gain_db: float = -10) -> None:
+def mix_audio(narration: Path, sfx: list, total: float, out: Path, sfx_gain_db: float = -10,
+              music: dict | None = None) -> None:
     voice, sr = sf.read(str(narration), dtype="float32")
     mix = np.zeros(int(total * sr) + sr, dtype=np.float32)
     mix[: len(voice)] += voice
+    if music:  # storyboard "music": {"synth": "ambient"} or {"file": ...}; see music.music_bed
+        from .music import music_bed
+        mix += music_bed(music, voice, sr, len(mix), PROJECT_ROOT)
     gain = 10 ** (sfx_gain_db / 20)
     cache: dict = {}
     for t, kind in sfx:
@@ -794,7 +833,7 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
                   caption_boxes={}, narration_end=narration_end, total=total)
 
     audio = out.with_suffix(".audio.wav")
-    mix_audio(root / sb["narration"] / "article.wav", sfx, total, audio)
+    mix_audio(root / sb["narration"] / "article.wav", sfx, total, audio, music=sb.get("music"))
 
     n_frames = int(total * FPS)
     ff = subprocess.Popen(
