@@ -37,6 +37,8 @@ ktts voices                                   # list voices
 ktts clips voices/rfi/source.mp3              # suggest 4-9 s reference clips between pauses
 ktts speak --voice rfi "សួស្តីបងប្អូនទាំងអស់គ្នា។"  # -> outputs/samples_rfi/
 ktts read  --voice rfi texts/article.txt      # -> outputs/article_rfi/article.wav (+ parts/)
+ktts video videos/laravel_spring_boot.json   # TikTok explainer -> outputs/video_laravel_spring_boot/tiktok.mp4
+ktts video videos/laravel_spring_boot.json --still 30 60   # preview single frames as PNG
 ktts vits  "សួស្តី"                             # baseline single-voice model, no cloning
 ```
 
@@ -66,6 +68,14 @@ VoxPocket reads long paragraphs badly, so prepare the text first (see `texts/art
 
 Lines that come out suspiciously short are retried with other seeds and listed at the end.
 Each line is also saved to `parts/NN.wav`, so a bad line can be regenerated alone.
+
+## Explainer videos
+
+`ktts video` turns a narrated article (`ktts read` output) into a 1080×1920 TikTok/Shorts video:
+animated cards per section, captions synced from the per-line `parts/` timing (English terms highlighted),
+a series badge, section counter and progress bar placed outside TikTok's UI zones, synthesized
+sound effects (whoosh, pop, ding), and loudness normalised for social platforms. Font: Google Sans.
+The storyboard JSON (`videos/*.json`) holds one caption per TTS line plus scenes keyed to line numbers.
 
 ## Voices
 

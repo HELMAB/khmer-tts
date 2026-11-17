@@ -6,6 +6,7 @@
     speak  --voice NAME "text" ["text" ...]  say a few sentences in a cloned voice
     read   --voice NAME texts/article.txt    read a whole prepared article
     vits   "text"                            baseline single-voice VITS model
+    video  videos/STORYBOARD.json            vertical explainer video from a narrated article
 """
 from __future__ import annotations
 
@@ -99,6 +100,22 @@ def cmd_vits(args) -> None:
     print(f"Wrote {out}: {result.duration:.2f}s @ {result.sample_rate} Hz in {result.seconds_taken:.2f}s")
 
 
+def cmd_video(args) -> None:
+    from .video import render, render_still
+
+    sb = Path(args.storyboard)
+    if args.still is not None:
+        for t in args.still:
+            out = OUTPUTS_DIR / "stills" / f"{sb.stem}_{t:06.2f}.png"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            render_still(sb, t, out, narration=args.narration)
+            print(out)
+        return
+    out, total, n_sfx = render(sb, Path(args.output) if args.output else None, seconds=args.seconds,
+                               narration=args.narration)
+    print(f"Wrote {out}: {total:.1f}s, {n_sfx} sound effects")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="khmer_tts", description="Khmer TTS with voice cloning")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -146,6 +163,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-o", "--output", help="default: outputs/vits.wav")
     p.add_argument("--seed", type=int, default=0)
     p.set_defaults(func=cmd_vits)
+
+    p = sub.add_parser("video", help="render a vertical explainer video from a storyboard")
+    p.add_argument("storyboard", help="storyboard JSON (see videos/)")
+    p.add_argument("-o", "--output", help="default: the storyboard's output path")
+    p.add_argument("--still", type=float, nargs="+", metavar="SEC", help="only render frames at these times (PNG)")
+    p.add_argument("--seconds", type=float, help="render only the first N seconds (quick preview)")
+    p.add_argument("--narration", help="use another `read` output folder instead of the storyboard's (e.g. another voice)")
+    p.set_defaults(func=cmd_video)
     return parser
 
 
