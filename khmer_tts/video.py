@@ -85,6 +85,23 @@ def khmer_clusters(word: str) -> list[str]:
     return out
 
 
+def split_balanced(word: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
+    """Split a long unspaced Khmer run into equal-width pieces at cluster boundaries (no 1-letter orphans)."""
+    clusters = khmer_clusters(word)
+    total = f.getlength(word)
+    n = max(1, math.ceil(total / max_w))
+    if n == 1:
+        n = 2  # only called when the run doesn't fit the current line; halve it rather than orphan
+    target, pieces, buf = total / n, [], ""
+    for cl in clusters:
+        if buf and len(pieces) < n - 1 and f.getlength(buf + cl) > target + f.getlength(cl) / 2:
+            pieces.append(buf)
+            buf = ""
+        buf += cl
+    pieces.append(buf)
+    return pieces
+
+
 def wrap(text: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[list[str]]:
     """Greedy wrap on spaces; Khmer runs wider than a line are split between clusters."""
     lines, cur = [], []
@@ -101,14 +118,9 @@ def wrap(text: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[list[str]]:
             words.append(word)
     for word in words:
         pieces = [word]
-        if f.getlength(word) > max_w:
-            pieces, buf = [], ""
-            for cl in khmer_clusters(word):
-                if buf and f.getlength(buf + cl) > max_w:
-                    pieces.append(buf)
-                    buf = ""
-                buf += cl
-            pieces.append(buf)
+        room = max_w - (width(cur) + space if cur else 0)
+        if f.getlength(word) > max_w or (cur and f.getlength(word) > room and f.getlength(word) > max_w * 0.6):
+            pieces = split_balanced(word, f, max_w)
         for piece in pieces:
             if cur and width(cur + [piece]) > max_w:
                 lines.append(cur)
@@ -182,6 +194,7 @@ class Scene:
     end: float
     elements: list
     counter: str = ""
+    captions: bool = True  # quote scenes show the words themselves, so they hide the caption box
 
 
 def line_timings(storyboard: dict, root: Path) -> tuple[list[tuple[float, float]], float]:
@@ -198,13 +211,13 @@ def line_timings(storyboard: dict, root: Path) -> tuple[list[tuple[float, float]
     return spans, t
 
 
-def build_card(brand: dict, items: list, y: int, at, sfx: list, verdict: bool) -> list[Element]:
+def build_card(brand: dict, items: list, y: int, at, sfx: list, height: int = CARD_H) -> list[Element]:
     color = hex_rgb(brand["color"])
-    card = Image.new("RGBA", (W - 2 * MARGIN, CARD_H), (0, 0, 0, 0))
+    card = Image.new("RGBA", (W - 2 * MARGIN, height), (0, 0, 0, 0))
     d = ImageDraw.Draw(card)
-    d.rounded_rectangle((0, 0, card.width - 1, CARD_H - 1), radius=36, fill=CARD_BG,
+    d.rounded_rectangle((0, 0, card.width - 1, height - 1), radius=36, fill=CARD_BG,
                         outline=color + (110,), width=3)
-    d.rounded_rectangle((0, 0, 14, CARD_H - 1), radius=7, fill=color)
+    d.rounded_rectangle((0, 0, 14, height - 1), radius=7, fill=color)
     name = text_image(brand["name"], 58, "Bold", color, line_gap=1.2)
     card.alpha_composite(name, (48, 18))
     tag = pill(brand["tag"], 30, TEXT, color + (60,), outline=color)
@@ -215,13 +228,13 @@ def build_card(brand: dict, items: list, y: int, at, sfx: list, verdict: bool) -
     sfx.append((t_card, "swish"))
 
     # chips flow left-to-right, wrapping inside the card; shrink the text until every chip fits
-    x0, max_x, top, bottom = MARGIN + 48, MARGIN + card.width - 36, y + 125, y + CARD_H - 22
-    for size in (36, 33, 30, 27, 24):
+    x0, max_x, top, bottom = MARGIN + 48, MARGIN + card.width - 36, y + 125, y + height - 22
+    for size in (48, 44, 40, 36, 33, 30, 27, 24) if height > CARD_H else (36, 33, 30, 27, 24):
         chips = [_chip(text, size, color, "strong" in style) for text, line, *style in items]
         placed, cx, cy, row_h = [], x0, top, 0
         for chip in chips:
             if cx + chip.width > max_x and cx > x0:
-                cx, cy, row_h = x0, cy + row_h + 16, 0
+                cx, cy, row_h = x0, cy + row_h + (22 if height > CARD_H else 16), 0
             placed.append((cx, cy))
             cx += chip.width + 16
             row_h = max(row_h, chip.height)
@@ -302,25 +315,86 @@ def build_title(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     return els
 
 
+def build_headline(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
+    """News-style intro: kicker label, big headline, subtitle, then numbered key points."""
+    t0 = at(scene["line"])
+    accent = hex_rgb(brands["b"]["color"])
+    kicker = pill(scene["kicker"], 34, (255, 255, 255), accent + (255,), weight="Bold")
+    head = text_image(scene["headline"], 84, "Bold", TEXT, align="left", highlight=HIGHLIGHT, line_gap=1.45)
+    els = [Element(kicker, MARGIN, 300, t0, dy=0, scale_in=True), Element(head, MARGIN, 300 + kicker.height + 24, t0 + 0.15)]
+    sfx += [(t0, "whoosh"), (t0 + 0.15, "swish")]
+    y = 300 + kicker.height + 24 + head.height + 16
+    if sub := scene.get("subtitle"):
+        s = text_image(sub["text"], 48, "Medium", HIGHLIGHT, align="left")
+        els.append(Element(s, MARGIN, y, at(sub["line"])))
+        sfx.append((at(sub["line"]), "pop"))
+        y += s.height + 26
+    color = hex_rgb(brands["a"]["color"])
+    for i, (text, line) in enumerate(scene.get("points", []), 1):
+        num = pill(str(i), 34, (255, 255, 255), color + (255,), weight="Bold", pad_x=22)
+        txt = text_image(text, 42, "Medium", TEXT, align="left", max_w=W - 2 * MARGIN - num.width - 24, line_gap=1.35)
+        row = Image.new("RGBA", (num.width + 20 + txt.width, max(num.height, txt.height)), (0, 0, 0, 0))
+        row.alpha_composite(num, (0, (row.height - num.height) // 2))
+        row.alpha_composite(txt, (num.width + 20, (row.height - txt.height) // 2))
+        els.append(Element(row, MARGIN, y, at(line) + 0.1 * (i - 1), dy=24))
+        sfx.append((at(line) + 0.1 * (i - 1), "pop"))
+        y += row.height + 14
+    return els
+
+
+def build_quote(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
+    """A direct quote revealed phrase by phrase, then the attribution."""
+    t0 = at(scene["line"])
+    color = hex_rgb(brands["b"]["color"])
+    mark = text_image("\u201c", 220, "Bold", color, line_gap=1.0)
+    els = [Element(mark, MARGIN - 6, 230, t0, dy=0, scale_in=True)]
+    sfx.append((t0, "whoosh"))
+    bar_top, y = 470, 470
+    for text, line in scene["phrases"]:
+        ph = text_image(text, 52, "Bold", TEXT, align="left", max_w=W - 2 * MARGIN - 50, line_gap=1.45)
+        els.append(Element(ph, MARGIN + 44, y, at(line), dy=20))
+        y += ph.height + 4
+    bar = Image.new("RGBA", (10, y - bar_top), color + (255,))
+    els.insert(1, Element(bar, MARGIN, bar_top, t0, dy=0))
+    if who := scene.get("by"):
+        name = text_image(who["name"], 44, "Bold", color, align="left", line_gap=1.3)
+        role = text_image(who["role"], 34, "Medium", MUTED, align="left", line_gap=1.3)
+        t = at(who["line"])
+        els += [Element(name, MARGIN + 44, y + 30, t), Element(role, MARGIN + 44, y + 30 + name.height, t + 0.1)]
+        sfx.append((t, "pop"))
+    return els
+
+
 def build_timeline(sb: dict, root: Path):
     spans, narration_end = line_timings(sb, root)
     at = lambda line: spans[line - 1][0]  # noqa: E731
     sfx: list[tuple[float, str]] = []
     scenes: list[Scene] = []
-    compare_total = sum(1 for s in sb["scenes"] if s["type"] == "compare" and not s.get("verdict"))
+    compare_total = sum(1 for s in sb["scenes"] if s["type"] in ("compare", "points") and not s.get("verdict"))
     starts = [at(s["line"]) for s in sb["scenes"]] + [narration_end]
     for i, s in enumerate(sb["scenes"]):
         t0, t1 = starts[i], starts[i + 1]
-        if s["type"] == "title":
-            els, counter = build_title(s, sb["brands"], at, sfx), ""
-        else:
+        kind, counter = s["type"], ""
+        if kind == "title":
+            els = build_title(s, sb["brands"], at, sfx)
+        elif kind == "headline":
+            els = build_headline(s, sb["brands"], at, sfx)
+        elif kind == "quote":
+            els = build_quote(s, sb["brands"], at, sfx)
+        elif kind in ("compare", "points"):
             verdict = s.get("verdict", False)
             els = build_header(s, t0, verdict)
-            els += build_card(sb["brands"]["a"], s["a"]["items"], CARD_A_Y, at, sfx, verdict)
-            els += build_card(sb["brands"]["b"], s["b"]["items"], CARD_B_Y, at, sfx, verdict)
+            if kind == "compare":
+                els += build_card(sb["brands"]["a"], s["a"]["items"], CARD_A_Y, at, sfx)
+                els += build_card(sb["brands"]["b"], s["b"]["items"], CARD_B_Y, at, sfx)
+            else:  # one tall card filling both card slots
+                brand = {"color": sb["brands"]["a"]["color"], **s["card"]}
+                els += build_card(brand, s["card"]["items"], CARD_A_Y, at, sfx, height=CARD_B_Y + CARD_H - CARD_A_Y)
             sfx.append((t0, "whoosh"))
             counter = "" if verdict else f"{s['number']} / {compare_total:02d}"
-        scenes.append(Scene(t0, t1, els, counter))
+        else:
+            raise SystemExit(f"unknown scene type {kind!r} (title, headline, compare, points, quote)")
+        scenes.append(Scene(t0, t1, els, counter, captions=s.get("captions", kind != "quote")))
 
     outro = sb.get("outro")
     total = narration_end + (outro["seconds"] if outro else 0.5)
@@ -346,7 +420,7 @@ def build_timeline(sb: dict, root: Path):
 
 # ---------------------------------------------------------------- frames
 
-def make_background() -> Image.Image:
+def make_background(glow_a=(255, 45, 32), glow_b=(109, 179, 63)) -> Image.Image:
     """Larger-than-frame backdrop (gradient, glows, dot grid); frames crop a slowly drifting window."""
     bw, bh = W + 160, H + 160
     grad = np.linspace(0, 1, bh)[:, None, None]
@@ -354,8 +428,8 @@ def make_background() -> Image.Image:
     bg = Image.fromarray(np.repeat(arr, bw, axis=1), "RGB").convert("RGBA")
     glow = Image.new("RGBA", (bw, bh), (0, 0, 0, 0))
     d = ImageDraw.Draw(glow)
-    d.ellipse((-250, -150, 650, 750), fill=(255, 45, 32, 70))
-    d.ellipse((bw - 650, bh - 950, bw + 250, bh - 50), fill=(109, 179, 63, 70))
+    d.ellipse((-250, -150, 650, 750), fill=glow_a + (70,))
+    d.ellipse((bw - 650, bh - 950, bw + 250, bh - 50), fill=glow_b + (70,))
     bg.alpha_composite(glow.filter(ImageFilter.GaussianBlur(160)))
     dots = ImageDraw.Draw(bg)
     for y in range(0, bh, 54):
@@ -413,16 +487,18 @@ def render_frame(n: int) -> bytes:
 
     # top overlay: series badge + section counter
     frame.alpha_composite(st["badge"], (MARGIN, 150))
+    show_captions = True
     for sc in st["scenes"]:
         if sc.start - 0.001 <= t < sc.end:
             fade_out = min(1.0, max(0.0, (sc.end - t) / SCENE_FADE)) if t < st["narration_end"] else 1.0
             for el in sc.elements:
                 paste(frame, el, t, fade_out)
+            show_captions = show_captions and sc.captions
             if sc.counter:
                 frame.alpha_composite(st["counters"][sc.counter], (W - MARGIN - st["counters"][sc.counter].width, 150))
 
     # caption box
-    for start, end, img in st["captions"]:
+    for start, end, img in st["captions"] if show_captions else ():
         if start <= t < end:
             a = min(1.0, (t - start) / 0.12)
             box_w, box_h = W - 2 * MARGIN, img.height + 40
@@ -517,7 +593,7 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
     counters = {sc.counter: pill(sc.counter, 30, (20, 22, 35), HIGHLIGHT + (255,), weight="Bold")
                 for sc in scenes if sc.counter}
-    _STATE.update(bg=make_background(), badge=badge, counters=counters, scenes=scenes, captions=captions,
+    _STATE.update(bg=make_background(hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])), badge=badge, counters=counters, scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)
 
     audio = out.with_suffix(".audio.wav")
@@ -552,6 +628,6 @@ def render_still(storyboard_path: Path, t: float, out: Path, narration: str | No
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
     counters = {sc.counter: pill(sc.counter, 30, (20, 22, 35), HIGHLIGHT + (255,), weight="Bold")
                 for sc in scenes if sc.counter}
-    _STATE.update(bg=make_background(), badge=badge, counters=counters, scenes=scenes, captions=captions,
+    _STATE.update(bg=make_background(hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])), badge=badge, counters=counters, scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)
     Image.frombytes("RGB", (W, H), render_frame(int(t * FPS))).save(out)

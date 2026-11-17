@@ -126,7 +126,7 @@ the same storyboard works with any `read` output via `--narration`.
      Write them in the original's display spelling: English terms back in Latin script, digits as in
      the original, no trailing `។`. The TTS file is for the ear; captions are for the eye.
    - `brands.a` / `brands.b`: `name`, `color` (hex), `tag` (short label shown on the card).
-     For a non-comparison topic, still use two cards (e.g. "Pros"/"Cons", "Before"/"After").
+     For a one-sided topic use `points` scenes (below) instead of forcing two cards.
    - `scenes`, each starting at a 1-based TTS `line` (a scene lasts until the next one starts):
      - `title`: big a VS b intro; optional `subtitle {line, text}` and `topics {line, items[]}` (≤ 4 short items).
      - `compare`: header `number` ("01"…), `title` (Khmer), `subtitle` (English); cards
@@ -134,6 +134,17 @@ the same storyboard works with any `read` output via `--narration`.
        Keep items to short key phrases (≤ ~22 chars), ≤ 6 per card; chips shrink to fit two-three rows.
      - Conclusion: a `compare` with `"number": "✓", "verdict": true`; mark the winning item
        `[text, line, "strong"]` (filled chip + check, plays a ding).
+     - `headline` (news intro): `kicker`, `headline`, optional `subtitle {line, text}`,
+       `points: [[text, line], ...]` (numbered rows, ≤ 3-4).
+     - `points` (one-sided topics, e.g. news): header like `compare` plus one tall card
+       `card: {name, tag, items: [[text, line], ...]}` (fits ~11 short items).
+     - `quote`: `phrases: [[text, line], ...]` revealed as spoken, `by: {name, role, line}`.
+       Hides the caption box (the quote is already on screen).
+     Pick by content: two-sided comparison → `title` + `compare`; news/report → `headline` +
+     `points` + `quote` for direct speech (see `videos/news.json`). `brands.a`/`b` colours also tint
+     the background glows (news uses blue `#3D6FE0` / red `#E0393E`).
+     Khmer has no spaces between words, so a long phrase may wrap mid-word: check stills and add a
+     space at a natural phrase break in the display text (never in the TTS text).
    - `outro`: `{seconds, text, subtitle}` shown after the narration (e.g. "តាមដានសម្រាប់មេរៀនបន្ថែម" / "Follow for more").
    Put scene starts on the line that introduces the section (e.g. "ចំណុចទីមួយ…"), and each card's
    first item on the line that names that brand, so visuals land on the words.
