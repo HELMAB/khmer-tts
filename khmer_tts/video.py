@@ -238,7 +238,7 @@ def build_card(brand: dict, items: list, y: int, at, sfx: list, height: int = CA
 
     # chips flow left-to-right, wrapping inside the card; shrink the text until every chip fits
     x0, max_x, top, bottom = MARGIN + 48, MARGIN + card.width - 36, y + 125, y + height - 22
-    for size in (48, 44, 40, 36, 33, 30, 27, 24) if height > CARD_H else (36, 33, 30, 27, 24):
+    for size in (48, 44, 40, 36, 33, 30, 27, 24) if height > CARD_H else (42, 39, 36, 33, 30, 27, 24):
         chips = [_chip(text, size, color, "strong" in style) for text, line, *style in items]
         placed, cx, cy, row_h = [], x0, top, 0
         for chip in chips:
@@ -618,8 +618,10 @@ def build_timeline(sb: dict, root: Path):
             verdict = s.get("verdict", False)
             els = build_header(s, t0, verdict)
             if kind == "compare":
-                els += build_card(sb["brands"]["a"], s["a"]["items"], CARD_A_Y, at, sfx, t_show=t0 + 0.2)
-                els += build_card(sb["brands"]["b"], s["b"]["items"], CARD_B_Y, at, sfx, t_show=t0 + 0.45)
+                # each card slides in when its brand is first named (its "line"), so it never sits empty
+                for key, y, lag in (("a", CARD_A_Y, 0.2), ("b", CARD_B_Y, 0.45)):
+                    t_card = max(t0 + lag, at(s[key]["line"]) - 0.15) if "line" in s[key] else t0 + lag
+                    els += build_card(sb["brands"][key], s[key]["items"], y, at, sfx, t_show=t_card)
             else:  # one tall card filling both card slots
                 brand = {"color": sb["brands"]["a"]["color"], **s["card"]}
                 els += build_card(brand, s["card"]["items"], CARD_A_Y, at, sfx, height=CARD_B_Y + CARD_H - CARD_A_Y)
