@@ -47,6 +47,23 @@ One phrase per line, about 25-90 characters, split at natural pauses (spaces bet
 before និង / ប៉ុន្តែ / ដែល / ដោយ / គឺ). Lines ending in `។ ! ? ៕` get a sentence pause, other lines a short one,
 so end each sentence's last line with `។`.
 
+- **Open every video narration with a spoken greeting** suited to the video type (the user asked for this),
+  as its own 1-2 lines at the top of the TTS file, each ending in `។`, with matching captions:
+  - news: `សួស្តីបងប្អូនទាំងអស់គ្នា។` + `សូមជូនព័ត៌មាន…` (name the place/topic without repeating the
+    next line, e.g. `សូមជូនព័ត៌មានថ្មីថ្មី ពីតំបន់អង្គរ។`);
+  - tutorial / how-to: `សួស្តីបងប្អូនទាំងអស់គ្នា។` + `ថ្ងៃនេះ យើងនឹងរៀនពី…។`;
+  - comparison: `សួស្តីបងប្អូនទាំងអស់គ្នា។` + `ថ្ងៃនេះ យើងនឹងប្រៀបធៀប … និង …។`;
+  - advice / quotes: `សួស្តីបងប្អូនទាំងអស់គ្នា។` + `ថ្ងៃនេះ ខ្ញុំសូមចែករំលែកពាក្យពេចន៍ល្អៗ…។`
+- **End every video narration with a spoken sign-off** (1-2 lines, each ending in `។`, with captions) and set
+  the storyboard's `outro.line` to its first line, so the outro card comes up as the goodbye starts:
+  - news: `សូមអរគុណបងប្អូន ដែលបានតាមដាន។` + `កុំភ្លេចចុចតាមដាន ដើម្បីទទួលបានព័ត៌មានថ្មីថ្មី។`;
+  - tutorial: `សង្ឃឹមថាមេរៀននេះមានប្រយោជន៍។` + `កុំភ្លេចចុចតាមដាន សម្រាប់មេរៀនបន្ទាប់។`;
+  - comparison: `តើបងប្អូនចូលចិត្តមួយណាជាង? សរសេរប្រាប់នៅខាងក្រោម។` + `កុំភ្លេចចុចតាមដាន។`;
+  - advice / quotes: `សូមអរគុណដែលបានស្តាប់។` + `សូមឱ្យបងប្អូនមានសុភមង្គល។`
+  Plain audio-only reads (section A) need neither greeting nor sign-off unless asked. Keep the user's original text file untouched.
+  The first scene starts at line 1, so the greeting plays over the intro visuals.
+  Adding a greeting to an existing narration: rename `parts/NN.wav` up by the number of new lines, generate
+  only the new lines (API snippet below), rebuild `article.wav`, and shift every `line` in the storyboard.
 - Numbers → Khmer words: ២០ → ម្ភៃ, ១៦ → ដប់ប្រាំមួយ, ២៩ → ម្ភៃប្រាំបួន, ២០២៦ → ពីរពាន់ម្ភៃប្រាំមួយ,
   ១២៧ → មួយរយម្ភៃប្រាំពីរ, ទី៣ → ទីបី. Same for Latin digits.
 - Expand the repeat sign: ថ្មីៗ → ថ្មីថ្មី, សំខាន់ៗ → សំខាន់សំខាន់.
@@ -200,7 +217,7 @@ the same storyboard works with any `read` output via `--narration`.
      background glows (news uses blue `#3D6FE0` / red `#E0393E`) and `brands.a` colours the chips.
      Khmer has no spaces between words, so a long phrase may wrap mid-word: check stills and add a
      space at a natural phrase break in the display text (never in the TTS text).
-   - `outro`: `{seconds, text, subtitle}` shown after the narration (e.g. "តាមដានសម្រាប់មេរៀនបន្ថែម" / "Follow for more").
+   - `outro`: `{seconds, text, subtitle, line}`; `line` = first TTS line of the spoken sign-off (the card starts there; without it, after the narration) (e.g. "តាមដានសម្រាប់មេរៀនបន្ថែម" / "Follow for more").
    Put scene starts on the line that introduces the section (e.g. "ចំណុចទីមួយ…"), and each card's
    first item on the line that names that brand, so visuals land on the words.
 

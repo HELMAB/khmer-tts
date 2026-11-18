@@ -240,8 +240,10 @@ def load_shot(path: Path, t0: float, idx: int) -> Shot:
 def build_timeline(sb: dict, root: Path):
     spans, narration_end = line_timings(sb, root)
     at = lambda line: INTRO + spans[line - 1][0]  # noqa: E731
-    t_outro = INTRO + narration_end + OUTRO_GAP
-    total = t_outro + OUTRO
+    # outro.line: the spoken sign-off's first TTS line; the outro card comes up as it starts
+    spoken = sb.get("outro", {}).get("line")
+    t_outro = at(spoken) if spoken else INTRO + narration_end + OUTRO_GAP
+    total = max(t_outro + OUTRO, INTRO + narration_end + 1.0)
     sfx: list = []
     els = build_intro(sb, sfx)
 

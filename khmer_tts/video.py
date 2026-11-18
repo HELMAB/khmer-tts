@@ -9,7 +9,7 @@ Storyboard (see videos/laravel_spring_boot.json):
     captions   one caption per TTS line, in display spelling (English terms in Latin script)
     brands     a/b: name, color, tag
     scenes     "title" or "compare"; every element names the 1-based line at which it appears
-    outro      seconds + text shown after the narration ends
+    outro      seconds + text shown after the narration ends (or from TTS line `line`, a spoken sign-off)
 """
 from __future__ import annotations
 
@@ -599,7 +599,10 @@ def build_timeline(sb: dict, root: Path):
     sfx: list[tuple[float, str]] = []
     scenes: list[Scene] = []
     compare_total = sum(1 for s in sb["scenes"] if s["type"] in ("compare", "points", "step") and not s.get("verdict"))
-    starts = [at(s["line"]) for s in sb["scenes"]] + [narration_end]
+    outro = sb.get("outro")
+    # outro.line: the spoken sign-off's first TTS line; the outro card comes up as it starts
+    t_outro = at(outro["line"]) if outro and outro.get("line") else narration_end
+    starts = [at(s["line"]) for s in sb["scenes"]] + [t_outro]
     for i, s in enumerate(sb["scenes"]):
         t0, t1 = starts[i], starts[i + 1]
         kind, counter = s["type"], ""
@@ -631,10 +634,9 @@ def build_timeline(sb: dict, root: Path):
             raise SystemExit(f"unknown scene type {kind!r} (title, headline, compare, points, step, quote)")
         scenes.append(Scene(t0, t1, els, counter, captions=s.get("captions", kind != "quote")))
 
-    outro = sb.get("outro")
-    total = narration_end + (outro["seconds"] if outro else 0.5)
+    total = max(t_outro + (outro["seconds"] if outro else 0.5), narration_end + 0.5)
     if outro:
-        t0 = narration_end
+        t0 = t_outro
         big = text_image(outro["text"], 70, "Bold", TEXT)
         sub = text_image(outro["subtitle"], 40, "Medium", HIGHLIGHT)
         heart = check_icon(150, HIGHLIGHT + (255,))
