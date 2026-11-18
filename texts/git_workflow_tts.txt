@@ -1,0 +1,76 @@
+សួស្តីបងប្អូនទាំងអស់គ្នា។
+ថ្ងៃនេះ យើងនឹងរៀនពី Git Workflow ឱ្យបានស៊ីជម្រៅ។
+នេះជាជំហានទីពីរ សម្រាប់អ្នកចង់ចេះ Git ឱ្យបានច្បាស់។
+យើងនឹងមើលពីរបៀបដែល Git ដំណើរការ នៅពីក្រោយ
+ឬដែលគេហៅថា Under the hood។
+និងរបៀបប្រើ Command មូលដ្ឋាន
+ឱ្យបានត្រឹមត្រូវ តាមស្ដង់ដារអ្នកជំនាញ។
+ទីមួយ ការបង្កើត Repository លើ GitHub។
+Repository ថ្មី មិនមែនគ្រាន់តែជា Folder ធម្មតានោះទេ
+វាមានជម្រើសសំខាន់សំខាន់ ដែលអ្នកត្រូវយល់។
+ចំណុចដំបូង គឺ Repository Name។
+គួរប្រើសញ្ញា dash ជំនួសឱ្យ Space
+ឧទាហរណ៍ my dash awesome dash project។
+បន្ទាប់មក គឺ Public ឬ Private។
+Public គឺនរណាក៏អាចមើលឃើញកូដរបស់អ្នកបានដែរ
+ល្អសម្រាប់ Portfolio និង Open Source។
+Private គឺមានតែអ្នក ឬក្រុមដែលអ្នកអនុញ្ញាត ទើបមើលឃើញ
+ល្អសម្រាប់ Projects ផ្ទាល់ខ្លួន ឬការងារក្រុមហ៊ុន។
+ជម្រើស Add a README file
+គឺជាទំព័រមុខនៃ Repo របស់អ្នក ដែលសរសេរដោយ Markdown
+ពន្យល់ថា Project នេះធ្វើអ្វី និងរបៀបប្រើប្រាស់។
+ជម្រើស Add dot gitignore សំខាន់ណាស់!
+វាប្រាប់ Git ឱ្យ Ignore File ដែលមិនចាំបាច់
+ដូចជា File cache និង Folder node modules
+សម្រាប់ Node JS ឬ configuration ផ្ទាល់ខ្លួន។
+ចុងក្រោយ Choose a license
+កំណត់សិទ្ធិផ្លូវច្បាប់ ពេលអ្នកដទៃយកកូដរបស់អ្នកទៅប្រើ។
+ទីពីរ ស្វែងយល់ពី Git Clone ឱ្យស៊ីជម្រៅ។
+ពេលអ្នកវាយ git clone រួចដាក់ URL
+Git មិនត្រឹមតែទាញយក File ចុងក្រោយមកទេ
+ប៉ុន្តែវាទាញយក Git History ទាំងអស់មកជាមួយផងដែរ។
+វាក៏បង្កើត Connection មួយហៅថា origin ដោយស្វ័យប្រវត្តិ
+ដែលភ្ជាប់កុំព្យូទ័ររបស់អ្នក ទៅកាន់ GitHub Repository ដើម។
+ទីបី Three Areas របស់ Git។
+Git រក្សាទុកកូដតាមបីកន្លែង។
+កន្លែងទីមួយ គឺ Working Directory
+ជា Folder ក្នុងកុំព្យូទ័រ ដែលអ្នកសរសេរ និងកែប្រែកូដផ្ទាល់។
+កន្លែងទីពីរ គឺ Staging Area ឬ Index
+ជាកន្លែងប្រមូល File ដែលអ្នកបានជ្រើសរើសរួចរាល់
+ដើម្បីត្រៀម Commit។
+កន្លែងទីបី គឺ Local Repository ឬ Folder dot git
+ដែល History នៃការ Commit ទាំងអស់
+ត្រូវបានរក្សាទុកជាអចិន្ត្រៃយ៍ ក្នុងកុំព្យូទ័ររបស់អ្នក។
+ទីបួន Advanced Git Workflow ម្តងមួយជំហាន។
+ជំហានទីមួយ ពិនិត្យស្ថានភាពជាមួយ git status។
+git status គឺជាភ្នែករបស់អ្នក។
+On branch main ប្រាប់ថាអ្នកស្ថិតនៅលើ Branch ណា។
+Changes not staged for commit ជាពណ៌ក្រហម
+គឺ File ដែលកែប្រែហើយ តែមិនទាន់ដាក់ចូល Staging Area។
+Changes to be committed ជាពណ៌បៃតង
+គឺ File ក្នុង Staging Area ដែលរួចរាល់សម្រាប់ Commit។
+Untracked files គឺ File ថ្មីស្រឡាង ដែល Git មិនទាន់តាមដាន។
+ជំហានទីពីរ ប្រើ git add ឱ្យបានត្រឹមត្រូវ។
+git add dot បញ្ចូល File ទាំងអស់ដែលបានកែប្រែ
+ទាំង File ថ្មី និង File ចាស់ ចូលទៅក្នុង Staging Area។
+git add រួចដាក់ឈ្មោះ File ដូចជា filename dot html
+គឺដាក់តែ File ជាក់លាក់ណាមួយប៉ុណ្ណោះ
+ល្អពេលអ្នកកែច្រើនកន្លែង តែចង់ Commit ដាច់ដោយឡែកពីគ្នា។
+ជំហានទីបី សរសេរ Commit Message តាមស្ដង់ដារ។
+Commit គឺដូចជាការថត Snapshot នៃកូដរបស់អ្នកនៅពេលនោះ។
+ដូច្នេះ Message គួរតែច្បាស់លាស់។
+ប្រើទម្រង់ស្ដង់ដារ ដែលគេហៅថា Conventional Commits។
+feat សម្រាប់ Feature ថ្មី ដូចជា feat add navigation bar។
+fix សម្រាប់កែ Bug ដូចជា fix resolve login bug។
+style សម្រាប់កែរចនាប័ទ្ម ដូចជា style update css layout។
+Command គឺ git commit dash m
+រួចសរសេរ Message ក្នុងសញ្ញាសម្រង់។
+ជំហានទីបួន Push កូដឡើងទៅ GitHub។
+ពេលវាយ git push ឬ git push origin main
+រាល់ Commit ក្នុង Local Repository របស់អ្នក
+នឹងត្រូវបញ្ជូនទៅកាន់ Server របស់ GitHub។
+ប្រសិនបើមានអ្នកផ្សេង បាន Push មុនអ្នក
+Git នឹងប្រាប់ថាមាន Conflict
+ដែលយើងនឹងរៀននៅជំហានបន្ទាប់។
+សង្ឃឹមថាមេរៀននេះមានប្រយោជន៍។
+កុំភ្លេចចុចតាមដាន សម្រាប់មេរៀនបន្ទាប់។

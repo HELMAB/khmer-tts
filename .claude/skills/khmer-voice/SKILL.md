@@ -43,9 +43,15 @@ tech-TikTok) for coding tutorials. Say which you picked; any narration can be sw
 
 ### Preparing text (the step that decides quality)
 
-One phrase per line, about 25-90 characters, split at natural pauses (spaces between clauses,
+One phrase per line, about 25-60 characters (never over ~70), split at natural pauses (spaces between clauses,
 before និង / ប៉ុន្តែ / ដែល / ដោយ / គឺ). Lines ending in `។ ! ? ៕` get a sentence pause, other lines a short one,
 so end each sentence's last line with `។`.
+
+**Clear, unhurried speech comes first** (the user asked: every word must be clear, not rushed or slurred).
+Long lines are what make the voice hurry, so split a long phrase rather than squeeze it, and give a list
+of commands or terms one or two items per line. After generating, flag every line that came out rushed
+(well under ~0.07 s per Khmer character, or a line whose English word sounds swallowed) and regenerate it
+with another seed (snippet under "Redoing a bad line"); tell the user which lines you redid and why.
 
 - **Open every video narration with a spoken greeting** suited to the video type (the user asked for this),
   as its own 1-2 lines at the top of the TTS file, each ending in `។`, with matching captions:
@@ -69,11 +75,23 @@ so end each sentence's last line with `។`.
 - Expand the repeat sign: ថ្មីៗ → ថ្មីថ្មី, សំខាន់ៗ → សំខាន់សំខាន់.
 - Remove `« » " ( )`, bullets `•`, `៖` (turn a heading with `៖` into its own line ending in `។`),
   zero-width spaces (U+200B), and Latin glosses in brackets such as `(Emmanuel Macron)`.
-- Abbreviations and foreign words: write them as they should be pronounced in Khmer, **except the topic's
-  core keywords and product names, which stay in Latin script** (the user asked: "Git", "branch",
-  "Branching", "GitHub", "GitLab", "Bitbucket" stay English, never "ហ្គីត" / "ប្រេន" / "ហ្គីតហាប់"; treat
-  other core technical terms and product/brand names of the topic the same way). VoxPocket
-  reads a short Latin word like `Git` fine (line lengths stay the same); check durations after.
+- **English words stay English: never translate them and never transliterate them into Khmer script**
+  (the user asked for this). Keep every English word, command, product and brand name in Latin script exactly
+  as in the original: "Git", "commit", "branch", "Branching", "GitHub", "repository", "SSH key", "Vercel"
+  stay as they are, never "ហ្គីត" / "ប្រេន" / "ហ្គីតហាប់" and never a Khmer equivalent such as
+  "ការរក្សាទុក" for "commit". Put a space before and after each English word or command so it is read on its
+  own, and don't run two long English terms together on one short line. VoxPocket reads Latin words; listen
+  for swallowed or mumbled ones in the durations check above and regenerate those lines.
+  Abbreviations that are not English (Khmer abbreviations, symbols) are still written out as spoken in Khmer.
+- **Tech keywords are spoken in English too, even when the text gives a Khmer translation** (the user asked:
+  "don't translate keyword like folder, snapshot, history"). When the original writes a Khmer word with an
+  English gloss, e.g. `ថត (Folder)`, `ម៉ាស៊ីនថតរូប (Snapshot)`, `ប្រវត្តិសាស្រ្តកូដ (Version Control)`,
+  `ពពក (Cloud)`, `ពាក្យសម្ងាត់ (Password)`, say the English keyword in its place (`Folder`, `Snapshot`,
+  `Version Control … History`, `Cloud`, `Password`) and use the same wording in the caption, without the
+  bracket. Same for un-glossed Khmer translations of the topic's keywords (Git: ឯកសារ → File,
+  កាតាបត្រៀម → Staging Area, សោ → Key, គណនី → Account, ពាក្យបញ្ជា → Command, បញ្ចូលគ្នា → Merge,
+  មុខងារថ្មី → Feature). Everyday Khmer words that were never English in the text stay Khmer (កុំព្យូទ័រ,
+  អ៊ីមែល, កូដ, ដំឡើង as a plain verb). When unsure whether a word counts as a keyword, ask the user.
 - Fix obvious typos only if the meaning is clear, and tell the user about each one.
 
 ### Redoing a bad line
