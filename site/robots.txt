@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://khmer-tts.vercel.app/sitemap.xml
+Sitemap: https://khmer-xtts.vercel.app/sitemap.xml

@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
   <url>
-    <loc>https://khmer-tts.vercel.app/</loc>
+    <loc>https://khmer-xtts.vercel.app/</loc>
     <lastmod>2026-11-21</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="en" href="https://khmer-tts.vercel.app/"/>
-    <xhtml:link rel="alternate" hreflang="km" href="https://khmer-tts.vercel.app/"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://khmer-xtts.vercel.app/"/>
+    <xhtml:link rel="alternate" hreflang="km" href="https://khmer-xtts.vercel.app/"/>
     <video:video>
-      <video:thumbnail_loc>https://khmer-tts.vercel.app/media/news.jpg</video:thumbnail_loc>
+      <video:thumbnail_loc>https://khmer-xtts.vercel.app/media/news.jpg</video:thumbnail_loc>
       <video:title>Example: a Khmer TikTok news video made with Khmer TTS</video:title>
       <video:description>A vertical news video generated from one article, narrated in a cloned Khmer voice.</video:description>
-      <video:content_loc>https://khmer-tts.vercel.app/media/news.mp4</video:content_loc>
+      <video:content_loc>https://khmer-xtts.vercel.app/media/news.mp4</video:content_loc>
       <video:duration>140</video:duration>
     </video:video>
   </url>
