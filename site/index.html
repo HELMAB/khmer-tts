@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="km">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Khmer TTS · និយាយភាសាខ្មែរ ដោយសំឡេងដែលអ្នកចង់បាន</title>
+<meta name="description" content="Clone a voice from a 5-second clip, read Khmer text aloud, and turn an article into a ready-to-post TikTok news video.">
+<meta property="og:title" content="Khmer TTS">
+<meta property="og:description" content="Khmer speech in any voice, and TikTok videos from one command.">
+<meta property="og:image" content="media/news.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Kantumruy+Pro:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#07090f; --panel:#0e121c; --line:#1d2433; --text:#eef1f7; --muted:#8a93a8;
+  --onair:#ff2d3d; --onair-deep:#a3101c; --gold:#ffd246; --navy:#0f1f45;
+  --display:"Big Shoulders Display", "Kantumruy Pro", sans-serif;
+  --body:"Kantumruy Pro", system-ui, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;overflow-x:clip}
+body{background:var(--ink);color:var(--text);font-family:var(--body);line-height:1.65;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+a{color:inherit}
+img,video{display:block;max-width:100%}
+.wrap{width:min(1180px,100% - 32px);margin-inline:auto}
+
+/* grain + scanlines for the control-room feel */
+body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;opacity:.07;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.scan{background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px)}
+
+/* ---------- top bar ---------- */
+header{position:sticky;top:0;z-index:40;backdrop-filter:blur(10px);background:rgba(7,9,15,.72);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;justify-content:space-between;height:64px;gap:16px}
+.brand{display:flex;align-items:center;gap:12px;font-family:var(--display);font-weight:800;font-size:26px;letter-spacing:.02em;text-decoration:none;text-transform:uppercase}
+.live{display:inline-flex;align-items:center;gap:7px;font:600 11px/1 var(--mono);letter-spacing:.16em;padding:6px 9px 6px 8px;border:1px solid var(--onair);color:var(--onair);border-radius:3px}
+.live i{width:7px;height:7px;border-radius:50%;background:var(--onair);box-shadow:0 0 10px var(--onair);animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+nav{display:flex;gap:26px;font-size:15px}
+nav a{text-decoration:none;color:var(--muted);transition:color .2s}
+nav a:hover{color:var(--text)}
+.gh{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-weight:500;font-size:14px;padding:9px 14px;border:1px solid var(--line);border-radius:999px;transition:border-color .2s,background .2s}
+.gh:hover{border-color:var(--muted);background:var(--panel)}
+@media (max-width:820px){nav{display:none}}
+
+/* ---------- hero ---------- */
+.hero{position:relative;padding:72px 0 40px;overflow:hidden}
+.hero::after{content:"";position:absolute;inset:auto -20% -40% 30%;height:620px;background:radial-gradient(closest-side,rgba(255,45,61,.22),transparent);pointer-events:none}
+.hero::before{content:"";position:absolute;inset:-30% 40% auto -25%;height:620px;background:radial-gradient(closest-side,rgba(40,80,200,.25),transparent);pointer-events:none}
+.hero-grid{position:relative;z-index:1;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.75fr);gap:48px;align-items:center}
+.kicker{font:600 12px/1 var(--mono);letter-spacing:.22em;text-transform:uppercase;color:var(--gold);display:flex;align-items:center;gap:12px}
+.kicker::before{content:"";width:34px;height:2px;background:var(--gold)}
+h1{font-family:var(--display);font-weight:900;text-transform:uppercase;font-size:clamp(64px,11vw,150px);line-height:.86;letter-spacing:-.01em;margin:22px 0 10px}
+h1 .red{color:var(--onair);-webkit-text-stroke:0}
+.km-tag{overflow-wrap:anywhere;font-weight:700;font-size:clamp(22px,3vw,34px);line-height:1.5;color:var(--gold)}
+.km-tag .ph{display:inline-block}
+.lede{overflow-wrap:break-word;font-size:clamp(17px,1.7vw,20px);color:#c5ccdb;max-width:560px;margin-top:14px}
+.cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px}
+.btn{display:inline-flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:14px 22px;border-radius:4px;text-decoration:none;transition:transform .15s,box-shadow .2s,background .2s}
+.btn.primary{background:var(--onair);color:#fff;box-shadow:0 10px 30px -10px rgba(255,45,61,.7)}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:0 16px 36px -12px rgba(255,45,61,.9)}
+.btn.ghost{border:1px solid var(--line);background:rgba(255,255,255,.02)}
+.btn.ghost:hover{border-color:var(--muted)}
+
+/* waveform */
+.wave{display:flex;align-items:center;gap:5px;height:84px;margin-top:40px}
+.wave span{flex:0 0 6px;border-radius:3px;background:#3a4a74;height:20%;animation:wv 1.2s ease-in-out infinite}
+.wave span:nth-child(-n+14){background:var(--onair)}
+@keyframes wv{0%,100%{transform:scaleY(.35)}50%{transform:scaleY(1)}}
+
+/* phone */
+.phone{position:relative;justify-self:center;width:min(330px,80vw);aspect-ratio:9/19.2;border-radius:46px;padding:12px;background:linear-gradient(160deg,#252c3d,#0b0e16);box-shadow:0 0 0 1px #2c3447,0 40px 80px -30px #000,0 0 120px -40px rgba(255,45,61,.55);transform:rotate(2.5deg);animation:rise 1s .2s both cubic-bezier(.2,.8,.2,1)}
+.phone video{width:100%;height:100%;object-fit:cover;border-radius:36px;background:#000}
+.phone .notch{position:absolute;top:22px;left:50%;translate:-50% 0;width:90px;height:24px;border-radius:20px;background:#000;z-index:2}
+.phone .tag{position:absolute;left:-46px;bottom:70px;z-index:3;background:var(--text);color:var(--ink);font:600 12px/1 var(--mono);letter-spacing:.08em;padding:10px 12px;border-radius:3px;transform:rotate(-6deg);box-shadow:0 12px 30px -10px #000}
+.phone .tag b{color:var(--onair)}
+.sound{position:absolute;right:-14px;top:90px;z-index:3;width:46px;height:46px;border-radius:50%;border:0;cursor:pointer;background:var(--onair);color:#fff;display:grid;place-items:center;box-shadow:0 10px 24px -8px rgba(255,45,61,.8)}
+.sound svg{width:22px;height:22px}
+@keyframes rise{from{opacity:0;transform:translateY(40px) rotate(6deg)}}
+.reveal{animation:up .8s both cubic-bezier(.2,.8,.2,1)}
+.d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.25s}.d4{animation-delay:.35s}.d5{animation-delay:.45s}
+@keyframes up{from{opacity:0;transform:translateY(24px)}}
+@media (max-width:900px){.hero-grid{grid-template-columns:minmax(0,1fr)}.phone{margin-top:20px;transform:none;animation:none}.phone .tag{left:-8px}.sound{right:-6px}}
+
+/* ---------- ticker ---------- */
+.ticker{display:flex;border-block:1px solid var(--line);background:var(--panel);overflow:hidden;position:relative}
+.ticker .label{flex:0 0 auto;background:var(--onair);color:#fff;font-weight:700;padding:14px 22px;z-index:2;font-size:16px}
+.ticker .track{display:flex;gap:44px;white-space:nowrap;padding:14px 0 14px 44px;animation:scroll 38s linear infinite;font-size:16px;color:#d6dbe7}
+.ticker .track span::after{content:"•";margin-left:44px;color:var(--onair)}
+@keyframes scroll{to{transform:translateX(-50%)}}
+
+/* ---------- sections ---------- */
+section{padding:110px 0}
+.sec-head{display:grid;grid-template-columns:auto 1fr;gap:28px;align-items:end;margin-bottom:56px}
+.num{font-family:var(--display);font-weight:900;font-size:120px;line-height:.75;color:transparent;-webkit-text-stroke:1.5px #3a4560}
+h2{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:clamp(40px,6vw,72px);line-height:.92}
+h2 small{overflow-wrap:anywhere;display:block;font-family:var(--body);text-transform:none;font-weight:500;font-size:20px;color:var(--gold);margin-top:10px;letter-spacing:0}
+@media (max-width:640px){.sec-head{grid-template-columns:1fr;gap:6px}.num{font-size:72px}}
+
+/* pipeline */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.step{padding:30px 26px 34px;border-right:1px solid var(--line);position:relative;transition:background .3s}
+.step:last-child{border-right:0}
+.step:hover{background:#121828}
+.step .k{font:600 12px/1 var(--mono);color:var(--muted);letter-spacing:.14em}
+.step h3{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:34px;margin:18px 0 4px;line-height:1}
+.step .km{color:var(--gold);font-weight:700;font-size:17px}
+.step p{color:#aab3c6;font-size:15px;margin-top:12px}
+.step .ico{position:absolute;top:26px;right:24px;width:30px;height:30px;color:var(--onair)}
+.one{min-width:0;overflow-wrap:anywhere;margin-top:22px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;font:400 15px/1.5 var(--mono);background:#05070c;border:1px solid var(--line);border-left:3px solid var(--onair);padding:18px 22px;border-radius:4px}
+.one .p{color:var(--onair)} .one .c{color:var(--muted)}
+@media (max-width:900px){.pipe{grid-template-columns:1fr 1fr}.step:nth-child(2){border-right:0}.step:nth-child(-n+2){border-bottom:1px solid var(--line)}}
+@media (max-width:520px){.pipe{grid-template-columns:1fr}.step{border-right:0;border-bottom:1px solid var(--line)}}
+
+/* styles */
+.styles{display:grid;grid-template-columns:1fr 1fr;gap:28px}
+.card{display:grid;grid-template-columns:200px 1fr;gap:28px;align-items:center;padding:26px;border:1px solid var(--line);border-radius:6px;background:linear-gradient(180deg,#0f1420,#0a0d15)}
+.card img{border-radius:12px;box-shadow:0 20px 40px -20px #000;aspect-ratio:9/16;object-fit:cover;width:100%}
+.card h3{font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:38px;line-height:1}
+.card .km{color:var(--gold);font-weight:700;margin:6px 0 14px}
+.card ul{list-style:none;display:grid;gap:8px;color:#b6bfd1;font-size:15px}
+.card li{display:flex;gap:10px}
+.card li::before{content:"";flex:0 0 6px;height:6px;margin-top:10px;background:var(--onair);border-radius:1px}
+@media (max-width:1000px){.styles{grid-template-columns:1fr}}
+@media (max-width:520px){.card{grid-template-columns:1fr}.card img{max-width:220px}}
+
+/* brand swatches */
+.brands{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:28px}
+.sw{border-radius:6px;overflow:hidden;border:1px solid var(--line);background:var(--panel)}
+.sw .demo{height:150px;padding:18px;display:flex;flex-direction:column;justify-content:flex-end;gap:8px;position:relative}
+.sw .bug{position:absolute;top:16px;left:18px;display:flex;font:700 13px/1 var(--body)}
+.sw .bug b{padding:6px 9px;color:#fff}.sw .bug em{font-style:normal;padding:6px 9px;background:#fff;color:#0e111a}
+.sw .tg{align-self:flex-start;font-weight:700;font-size:13px;padding:4px 10px;color:#fff}
+.sw .tl{background:#fff;color:#0e111a;font-weight:700;padding:8px 12px;border-left:6px solid}
+.sw .meta{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;font-size:15px}
+.sw .dots{display:flex;gap:6px}.sw .dots i{width:16px;height:16px;border-radius:50%;border:1px solid rgba(255,255,255,.2)}
+.sw code{font:400 12px var(--mono);color:var(--muted)}
+@media (max-width:820px){.brands{grid-template-columns:1fr}}
+.note{color:var(--muted);font-size:15px;max-width:720px}
+
+/* voices */
+.voices{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+.vc{padding:26px;border:1px solid var(--line);border-radius:6px;background:var(--panel);position:relative;overflow:hidden}
+.vc .nm{font:600 22px/1 var(--mono)}
+.vc .use{color:var(--gold);font-weight:700;margin:12px 0 6px}
+.vc p{color:#aab3c6;font-size:15px}
+.vc .mini{display:flex;gap:3px;align-items:flex-end;height:36px;margin-top:22px}
+.vc .mini i{flex:1;background:#2b3754;border-radius:2px}
+.vc:hover .mini i{background:var(--onair)}
+@media (max-width:820px){.voices{grid-template-columns:1fr}}
+
+/* code */
+.term{border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#05070c;box-shadow:0 30px 60px -30px #000}
+.term .top{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--line);background:#0b0f18}
+.term .top i{width:11px;height:11px;border-radius:50%;background:#2a3142}
+.term .top i:nth-child(1){background:#ff5f57}.term .top i:nth-child(2){background:#febc2e}.term .top i:nth-child(3){background:#28c840}
+.term .top span{margin-left:10px;font:400 13px var(--mono);color:var(--muted)}
+.term .copy{margin-left:auto;font:600 12px var(--mono);background:none;border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:4px;cursor:pointer}
+.term .copy:hover{border-color:var(--muted)}
+.term pre{padding:22px 24px;overflow-x:auto;font:400 15px/1.85 var(--mono);color:#d7dcea}
+.term .cm{color:#6d7790;font-style:italic}.term .pr{color:var(--onair)}.term .kh{font-family:var(--body)}
+.reqs{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.reqs span{border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;color:#c5ccdb}
+
+/* footer */
+footer{border-top:1px solid var(--line);padding:46px 0 60px;color:var(--muted);font-size:14px}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:20px}
+.foot .ai{display:flex;gap:10px;align-items:flex-start;max-width:560px}
+.foot .ai b{color:var(--text)}
+
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <a class="brand" href="#top">Khmer TTS <span class="live"><i></i>ON AIR</span></a>
+    <nav>
+      <a href="#how">របៀបដំណើរការ</a>
+      <a href="#styles">វីដេអូ</a>
+      <a href="#voices">សំឡេង</a>
+      <a href="#start">ចាប់ផ្តើម</a>
+    </nav>
+    <a class="gh" href="https://github.com/HELMAB/khmer-tts-audio-generator" target="_blank" rel="noopener">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.42c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.08-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.62 1.58.23 2.75.11 3.04.74.8 1.18 1.83 1.18 3.08 0 4.41-2.69 5.38-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero scan" style="padding-top:72px">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="kicker reveal d1">Khmer speech · any voice</div>
+        <h1 class="reveal d2">Khmer<br><span class="red">TTS</span></h1>
+        <p class="km-tag reveal d3"><span class="ph">និយាយភាសាខ្មែរ</span> <span class="ph">ដោយសំឡេងដែលអ្នកចង់បាន</span></p>
+        <p class="lede reveal d4">Clone a voice from a five-second clip, read whole Khmer articles aloud, and turn a news link into a ready-to-post TikTok, Reels or Shorts video, all from one command line.</p>
+        <div class="cta reveal d5">
+          <a class="btn primary" href="#start">ចាប់ផ្តើម · Get started
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a class="btn ghost" href="#styles">មើលឧទាហរណ៍ · See examples</a>
+        </div>
+        <div class="wave reveal d5" aria-hidden="true" id="wave"></div>
+      </div>
+      <div class="phone">
+        <div class="notch"></div>
+        <video id="demo" src="media/news.mp4" poster="media/news.jpg" autoplay muted loop playsinline preload="metadata"></video>
+        <button class="sound" id="sound" aria-label="Turn sound on">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4V5Z"/><path id="snd" d="m22 9-6 6m0-6 6 6"/></svg>
+        </button>
+        <div class="tag">MADE WITH <b>ktts make</b></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="label">ព័ត៌មានថ្មី</div>
+    <div class="track" id="track"></div>
+  </div>
+
+  <section id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="num">01</div>
+        <h2>Article in.<br>Video out.<small>ពីអត្ថបទ ទៅជាវីដេអូ ក្នុងពាក្យបញ្ជាតែមួយ</small></h2>
+      </div>
+      <div class="pipe">
+        <div class="step">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/></svg>
+          <div class="k">STEP 1</div><h3>Text</h3><div class="km">អត្ថបទ</div>
+          <p>Paste an article or a script. A news link works too: the text and photos come from the page.</p>
+        </div>
+        <div class="step">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h10M4 18h7"/><path d="m17 15 2 2 3-4"/></svg>
+          <div class="k">STEP 2</div><h3>Prepare</h3><div class="km">រៀបចំអត្ថបទ</div>
+          <p>Numbers become Khmer words, ៗ is expanded, and long sentences are split at natural pauses so nothing sounds rushed.</p>
+        </div>
+        <div class="step">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+          <div class="k">STEP 3</div><h3>Voice</h3><div class="km">សំឡេង</div>
+          <p>Each line is spoken in the cloned voice you pick, with a greeting at the start and a sign-off at the end.</p>
+        </div>
+        <div class="step">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="6" y="2" width="12" height="20" rx="2.5"/><path d="m10.5 9 4 3-4 3z"/></svg>
+          <div class="k">STEP 4</div><h3>Video</h3><div class="km">វីដេអូ</div>
+          <p>A 1080×1920 video with captions in sync, animated cards, sound effects and loudness ready for TikTok.</p>
+        </div>
+      </div>
+      <div class="one"><span class="p">$</span> ktts make texts/article.txt --voice rfi --images videos/images/article <span class="c"># → outputs/video_article/tiktok_rfi.mp4</span></div>
+    </div>
+  </section>
+
+  <section id="styles" style="padding-top:20px">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="num">02</div>
+        <h2>Two looks.<br>One storyboard.<small>រចនាបថ ព័ត៌មាន និងការពន្យល់</small></h2>
+      </div>
+      <div class="styles">
+        <article class="card">
+          <img src="media/news.jpg" alt="News-style video frame with photo, lower third and ticker" loading="lazy">
+          <div>
+            <h3>News</h3>
+            <div class="km">ព័ត៌មាន</div>
+            <ul>
+              <li>Full-screen article photos with slow zoom and pan</li>
+              <li>Lower third, key-fact chips and a scrolling ticker</li>
+              <li>Intro stinger, outro card and source credits</li>
+            </ul>
+          </div>
+        </article>
+        <article class="card">
+          <img src="media/explainer.jpg" alt="Explainer-style video frame comparing Laravel and Spring Boot" loading="lazy">
+          <div>
+            <h3>Explainer</h3>
+            <div class="km">ការពន្យល់</div>
+            <ul>
+              <li>Comparisons, tutorials, quotes and step-by-step guides</li>
+              <li>Code and terminal windows that type along with the voice</li>
+              <li>Brand colours, chips that pop in as each word is said</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+
+      <div style="margin-top:64px">
+        <p class="kicker">News site branding</p>
+        <h3 style="font-family:var(--display);font-weight:800;text-transform:uppercase;font-size:40px;margin-top:14px;line-height:1">The video wears the source's colours</h3>
+        <p class="note" style="margin-top:10px">Give the article link and the layout picks up that site's branding automatically: bands, tags, ticker and overlays.</p>
+        <div class="brands">
+          <div class="sw">
+            <div class="demo" style="background:linear-gradient(180deg,#0b2f55,#05172a)">
+              <div class="bug"><b style="background:#025A9E">NEWS</b><em>ព័ត៌មានខ្លី</em></div>
+              <span class="tg" style="background:#E60000">ទេសចរណ៍</span>
+              <span class="tl" style="border-color:#025A9E">ប្រាសាទព្រះគោ</span>
+            </div>
+            <div class="meta"><span>Thmey Thmey</span><span class="dots"><i style="background:#025A9E"></i><i style="background:#E60000"></i><i style="background:#08A8E8"></i></span></div>
+          </div>
+          <div class="sw">
+            <div class="demo" style="background:linear-gradient(180deg,#1a1c20,#0b0c0e)">
+              <div class="bug"><b style="background:#E2001A">NEWS</b><em>ព័ត៌មានខ្លី</em></div>
+              <span class="tg" style="background:#E2001A">សេដ្ឋកិច្ច</span>
+              <span class="tl" style="border-color:#E2001A">២០ ពាន់លានដុល្លារ</span>
+            </div>
+            <div class="meta"><span>RFI ខេមរភាសា</span><span class="dots"><i style="background:#E2001A"></i><i style="background:#0E1013"></i><i style="background:#FF5A6A"></i></span></div>
+          </div>
+          <div class="sw">
+            <div class="demo" style="background:linear-gradient(180deg,#0b2d73,#022059)">
+              <div class="bug"><b style="background:#21428B">NEWS</b><em>ព័ត៌មានខ្លី</em></div>
+              <span class="tg" style="background:#DC2626">កសិកម្ម</span>
+              <span class="tl" style="border-color:#21428B">ផ្ទះសំណាញ់ ៨៩ ខ្នង</span>
+            </div>
+            <div class="meta"><span>Fresh News</span><span class="dots"><i style="background:#21428B"></i><i style="background:#DC2626"></i><i style="background:#022059"></i></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="voices" style="padding-top:20px">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="num">03</div>
+        <h2>Any voice.<br>Five seconds.<small>ចម្លងសំឡេង ពីឃ្លីបខ្លី ៤ ទៅ ៩ វិនាទី</small></h2>
+      </div>
+      <div class="voices">
+        <div class="vc"><div class="nm">rfi</div><div class="use">អ្នកអានព័ត៌មាន</div><p>A calm news-anchor read, the default for news videos.</p><div class="mini" data-seed="3"></div></div>
+        <div class="vc"><div class="nm">general</div><div class="use">TikTok បច្ចេកវិទ្យា</div><p>Casual and quick, for coding tutorials and tech comparisons.</p><div class="mini" data-seed="7"></div></div>
+        <div class="vc"><div class="nm">advice</div><div class="use">ពាក្យពេចន៍ល្អៗ</div><p>Warm and slow, for quotes and life advice.</p><div class="mini" data-seed="11"></div></div>
+      </div>
+      <div class="one" style="margin-top:28px"><span class="p">$</span> ktts add-voice myvoice recording.mp3 --start 0 --duration 6 --text "…" <span class="c"># clone from the exact words in the clip</span></div>
+    </div>
+  </section>
+
+  <section id="start" style="padding-top:20px">
+    <div class="wrap">
+      <div class="sec-head">
+        <div class="num">04</div>
+        <h2>Get started<small>ចាប់ផ្តើមប្រើ</small></h2>
+      </div>
+      <div class="term">
+        <div class="top"><i></i><i></i><i></i><span>terminal</span><button class="copy" id="copy">copy</button></div>
+<pre id="code"><span class="cm"># install (Python 3.12 + ffmpeg)</span>
+<span class="pr">$</span> python3.12 -m venv .venv-voxpocket
+<span class="pr">$</span> .venv-voxpocket/bin/pip install -r requirements.txt
+<span class="pr">$</span> alias ktts='.venv-voxpocket/bin/python -m khmer_tts'
+
+<span class="cm"># speak, read, make a video</span>
+<span class="pr">$</span> ktts voices
+<span class="pr">$</span> ktts speak --voice rfi "<span class="kh">សួស្តីបងប្អូនទាំងអស់គ្នា។</span>"
+<span class="pr">$</span> ktts read  --voice rfi texts/article.txt
+<span class="pr">$</span> ktts make  --voice rfi texts/article.txt</pre>
+      </div>
+      <div class="reqs">
+        <span>Python 3.12</span><span>ffmpeg</span><span>NVIDIA GPU, 4 GB is enough</span><span>or Apple Silicon Mac</span><span>Google Sans font</span>
+        <span>Model: <a href="https://huggingface.co/muyleanging/VoxPocket-TTS-Khmer" target="_blank" rel="noopener">VoxPocket</a> (~2 GB, first run)</span>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <div class="ai"><span class="live" style="flex:0 0 auto"><i></i>AI</span><span><b>Label AI voices.</b> Videos made with a cloned voice carry a "សំឡេង AI" tag; tick TikTok's AI-generated label when you post, and only clone voices you have permission to use.</span></div>
+    <div>Khmer TTS · built on VoxPocket · <a href="https://github.com/HELMAB/khmer-tts-audio-generator" target="_blank" rel="noopener">GitHub</a></div>
+  </div>
+</footer>
+
+<script>
+// hero waveform: deterministic bar heights, staggered animation
+(function(){
+  const w=document.getElementById('wave'); if(!w) return;
+  const n=Math.max(28,Math.min(64,Math.floor(w.clientWidth/11)));
+  for(let i=0;i<n;i++){const s=document.createElement('span');
+    const h=30+60*Math.abs(Math.sin(i*1.7)*Math.cos(i*.43));
+    s.style.height=h+'%'; s.style.animationDelay=(-(i*.09)%1.2)+'s'; s.style.animationDuration=(.9+((i*37)%7)/10)+'s'; w.appendChild(s);}
+})();
+// voice card mini waves
+document.querySelectorAll('.mini').forEach(m=>{const k=+m.dataset.seed;
+  for(let i=0;i<34;i++){const b=document.createElement('i'); b.style.height=(18+80*Math.abs(Math.sin((i+k)*0.9)*Math.sin((i*k)*.13+1)))+'%'; m.appendChild(b);}});
+// ticker: duplicate items for a seamless loop
+(function(){const items=["ចម្លងសំឡេង ពីឃ្លីប ៥ វិនាទី","អានអត្ថបទខ្មែរទាំងមូល","វីដេអូ TikTok ក្នុងពាក្យបញ្ជាតែមួយ","ចំណងជើង ពេលវេលាត្រូវគ្នា","ពណ៌តាមគេហទំព័រព័ត៌មាន","English words stay English"];
+  const t=document.getElementById('track'); const html=items.map(x=>`<span>${x}</span>`).join(''); t.innerHTML=html+html;})();
+// sound toggle
+(function(){const v=document.getElementById('demo'),b=document.getElementById('sound'),p=document.getElementById('snd');
+  b.addEventListener('click',()=>{v.muted=!v.muted; if(!v.muted){v.currentTime=0;v.play();}
+    p.setAttribute('d',v.muted?'m22 9-6 6m0-6 6 6':'M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13');
+    b.setAttribute('aria-label',v.muted?'Turn sound on':'Turn sound off');});})();
+// copy commands
+document.getElementById('copy').addEventListener('click',e=>{
+  const txt=document.getElementById('code').innerText.split('\n').filter(l=>l.startsWith('$')).map(l=>l.slice(2)).join('\n');
+  navigator.clipboard?.writeText(txt).then(()=>{e.target.textContent='copied';setTimeout(()=>e.target.textContent='copy',1500)});});
+</script>
+</body>
+</html>
