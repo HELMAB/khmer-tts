@@ -44,6 +44,12 @@ tech-TikTok) for coding tutorials. Say which you picked; any narration can be sw
 4. Report: output path, duration, any lines listed under "Lines that may be cut short", and every
    editorial change you made while preparing the text. The user must listen; you cannot.
 
+**Quick draft video:** `$KT make texts/<stem>.txt --voice NAME [--images videos/images/<stem>] [--kind news|tutorial|promo|advice]`
+does prepare → greeting/sign-off → read → storyboard → render in one go. Its storyboard is a mechanical draft
+(scene titles and chips are cut from the captions), so for a polished video edit `videos/<stem>.json`
+by hand as described below and re-run the same command; it reuses the text, storyboard and every unchanged
+narration line (`read` does the same: only new or changed lines are regenerated; `--fresh` forces all).
+
 ### Preparing text (the step that decides quality)
 
 One phrase per line, about 25-60 characters (never over ~70), split at natural pauses (spaces between clauses,
@@ -293,11 +299,20 @@ grid and two brand glows (`make_background`), macOS-style windows with drop shad
 
 For a news article, prefer the broadcast style in `khmer_tts/news_video.py` (example: `videos/mercedes_rma_news.json`):
 full-bleed photos with Ken Burns motion and cross-fades, a channel bug, date and optional `disclosure` tag,
-key-fact chips, a lower third (red `tag`, white `title` bar, `subtitle` strip), captions, a scrolling `ticker`,
+key-fact chips, a lower third (`tag`, white `title` bar, `subtitle` strip) in the news site's colours, captions, a scrolling `ticker`,
 a 3.2 s intro stinger before the narration and an outro card with `credits`. Scene fields: `line`, `tag`, `title`,
 `subtitle`, `images [[file, line], ...]` (from `images_dir`), `facts [[text, line], ...]`, `numbered`.
 Landscape photos are shown whole over a blurred fill; square ones fill the photo area.
 An article with a single photo is fine: list it in every scene's `images` and the zoom/pan alternates.
+
+**Site branding colours.** Set `"source": "<article URL>"`; the layout takes the news site's colours from
+`SITE_THEMES` in `news_video.py` (thmeythmey.com: logo blue `#025A9E` bands/bug/ticker, red `#E60000` tags,
+light blue `#08A8E8` progress line and highlights). An unknown site falls back to the default red/navy; while the
+article is open in Chrome, sample its logo colours (draw the logo image to a canvas and average its main hues;
+page CSS is often neutral) and add the site to `SITE_THEMES` so later videos pick it up. A storyboard
+`"theme": {"primary", "tag", "base", "highlight"}` overrides any role for one video (`base`, the dark overlay
+tint, defaults to a deep shade of `primary`; text on light colours turns dark automatically). `make` sets `source`
+from a URL in the article text.
 Keep each lower-third `title` to one line (~22 Khmer characters); the renderer warns
 "lower third … reaches y=…, over the captions" when it wraps. For a cloned voice, set
 `"disclosure": "សំឡេង AI"` and remind the user to tick TikTok's AI-generated label (they may remove the tag).

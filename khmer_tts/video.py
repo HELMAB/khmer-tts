@@ -95,8 +95,13 @@ def khmer_clusters(word: str) -> list[str]:
 
 
 def split_balanced(word: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[str]:
-    """Split a long unspaced Khmer run into equal-width pieces at cluster boundaries (no 1-letter orphans)."""
-    clusters = khmer_clusters(word)
+    """Split a long unspaced Khmer run into equal-width pieces, between words where a Khmer word
+    segmenter is installed (khmer-nltk), else at cluster boundaries (never inside a letter stack)."""
+    from .prepare import khmer_words
+    units = khmer_words(word)
+    if len(units) < 2 or any(f.getlength(u) > max_w for u in units):
+        units = khmer_clusters(word)
+    clusters = units
     total = f.getlength(word)
     n = max(1, math.ceil(total / max_w))
     if n == 1:
@@ -146,6 +151,8 @@ def wrap(text: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[list[str]]:
 def text_image(text: str, size: int, weight="Regular", color=TEXT, max_w=CONTENT_W,
                highlight=None, align="center", line_gap=1.55) -> Image.Image:
     """Render (wrapped) text to a tight RGBA image. Latin tokens get `highlight` colour if given."""
+    if not text.strip():
+        return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
     f = font(size, weight)
     lines = wrap(text, f, max_w)
     space = f.getlength(" ")
@@ -794,6 +801,7 @@ def mix_audio(narration: Path, sfx: list, total: float, out: Path, sfx_gain_db: 
               music: dict | None = None) -> None:
     voice, sr = sf.read(str(narration), dtype="float32")
     mix = np.zeros(int(total * sr) + sr, dtype=np.float32)
+    voice = voice[: len(mix)]  # --seconds previews cut the narration short
     mix[: len(voice)] += voice
     if music:  # storyboard "music": {"synth": "ambient"} or {"file": ...}; see music.music_bed
         from .music import music_bed
@@ -813,6 +821,19 @@ def mix_audio(narration: Path, sfx: list, total: float, out: Path, sfx_gain_db: 
 
 
 # ---------------------------------------------------------------- main
+
+def default_workers(per_worker_gb: float = 0.7) -> int:
+    """Render workers: one per CPU (minus two), but no more than free memory allows
+    (each worker holds its own frames; too many get the render killed)."""
+    n = max(1, mp.cpu_count() - 2)
+    try:
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            if line.startswith("MemAvailable:"):
+                n = min(n, max(1, math.floor(int(line.split()[1]) / 1024 / 1024 / per_worker_gb)))
+    except OSError:  # macOS: no /proc
+        pass
+    return n
+
 
 def load_storyboard(path: Path, narration: str | None = None) -> dict:
     """Read a storyboard; `narration` swaps in another `khmer_tts read` output (e.g. a different voice)."""
@@ -854,7 +875,7 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
         stdin=subprocess.PIPE,
     )
     ctx = mp.get_context("fork")  # workers inherit the prebuilt layers in _STATE
-    with ctx.Pool(workers or max(1, mp.cpu_count() - 2)) as pool:
+    with ctx.Pool(workers or default_workers()) as pool:
         for i, frame in enumerate(pool.imap(render_frame, range(n_frames), chunksize=8)):
             ff.stdin.write(frame)
             if i % (FPS * 10) == 0:

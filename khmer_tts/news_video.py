@@ -3,7 +3,8 @@
 Layout (1080x1920, kept clear of TikTok's UI and side crop on tall phones, see SAFE_TOP etc. in video.py):
     full-bleed article photos with slow Ken Burns zoom/pan and cross-fades, over a blurred copy of the photo
     top-left channel bug + date, optional disclosure tag top-right
-    key-fact chips stacked above a lower third (red tag, white headline bar, navy subtitle strip)
+    key-fact chips stacked above a lower third (tag, white headline bar, subtitle strip)
+    colours from the news site's branding (SITE_THEMES, picked by the storyboard's "source" URL) or "theme"
     captions under the lower third, scrolling ticker with a progress line
     an animated intro stinger before the narration and an outro card with credits after it
 
@@ -22,8 +23,8 @@ import numpy as np
 import soundfile as sf
 from PIL import Image, ImageDraw, ImageFilter
 
-from .video import (CROP_X, FPS, H, HIGHLIGHT, LOUDNORM, RAIL_X, SAFE_TOP, W, back_out, ease_out, line_timings, load_storyboard,
-                    synth_sfx, text_image)
+from .video import (CROP_X, FPS, H, LOUDNORM, RAIL_X, SAFE_TOP, W, back_out, default_workers, ease_out, line_timings, load_storyboard,
+                    hex_rgb, synth_sfx, text_image)
 from .voices import PROJECT_ROOT
 
 L, R = CROP_X + 45, RAIL_X        # inside the side crop and left of TikTok's right-hand buttons
@@ -32,8 +33,62 @@ PHOTO_H = 1250                     # sharp photo area; fades into the blurred fi
 FACTS_BOTTOM, TAG_Y, CAPTION_Y = 975, 1000, 1300
 TICKER_Y, TICKER_H, LABEL_W, TICKER_SPEED = 1452, 62, 230, 110
 
-RED, NAVY, INK, WHITE, SOFT = (206, 28, 38), (9, 17, 40), (14, 17, 26), (255, 255, 255), (196, 203, 222)
+INK, WHITE, SOFT = (14, 17, 26), (255, 255, 255), (196, 203, 222)
+
+# Branding per news site, picked from the storyboard's "source" URL (domain or any subdomain of it).
+#   primary:   NEWS bug, intro/outro bands, headline bar edge, chip markers, ticker label
+#   tag:       lower-third tag (default: primary)
+#   base:      dark tint of the photo overlay, subtitle strip, chips and ticker (default: a dark shade of primary)
+#   highlight: progress line and highlighted (English) words (default: yellow)
+# A storyboard "theme" {primary, tag, base, highlight} overrides any of these; without a known site the
+# storyboard "accent" (if set) becomes the primary colour. Add a site by sampling its logo colours.
+DEFAULT_THEME = {"primary": "#CE1C26", "base": "#091128", "highlight": "#FFD246"}
+SITE_THEMES = {
+    "thmeythmey.com": {"primary": "#025A9E", "tag": "#E60000", "highlight": "#08A8E8"},  # logo blue, red, light blue
+    "freshnews.com.kh": {"primary": "#21428B", "tag": "#DC2626", "base": "#022059", "highlight": "#7FA7FF"},  # logo blue, red, navy page
+    "rfi.fr": {"primary": "#E2001A", "base": "#0E1013", "highlight": "#FF5A6A"},  # RFI red on its near-black logo ink
+}
+PRIMARY = TAG = ON_PRIMARY = ON_TAG = BASE = CHIP = HIGHLIGHT = None  # set by apply_theme()
 ANIM, FADE, XFADE = 0.35, 0.3, 0.5
+
+
+def site_theme(source: str | None) -> dict:
+    host = (source or "").split("//")[-1].split("/")[0].lower().removeprefix("www.")
+    for domain, theme in SITE_THEMES.items():
+        if host == domain or host.endswith("." + domain):
+            return theme
+    return {}
+
+
+def resolve_theme(sb: dict) -> dict:
+    """The storyboard's colours as RGB tuples: defaults < accent < site of "source" < "theme"."""
+    site, own = site_theme(sb.get("source")), sb.get("theme", {})
+    th = dict(DEFAULT_THEME)
+    if sb.get("accent") or site or "primary" in own:
+        th.pop("base")  # a brand colour is set: derive the base from it unless one is given
+    if sb.get("accent"):
+        th["primary"] = sb["accent"]
+    th.update(site)
+    th.update(own)
+    rgb = {k: hex_rgb(v) for k, v in th.items()}
+    rgb.setdefault("tag", rgb["primary"])
+    if "base" not in rgb:  # a deep shade of the primary colour, so overlays and strips match the brand
+        rgb["base"] = tuple(round(0.18 * c + 0.82 * d) for c, d in zip(rgb["primary"], (6, 8, 16)))
+    return rgb
+
+
+def on(bg) -> tuple:
+    """White or ink text, whichever reads better on a filled block of colour bg."""
+    lum = sum(w * (c / 255) ** 2.2 for w, c in zip((0.2126, 0.7152, 0.0722), bg))
+    return INK if lum > 0.36 else WHITE
+
+
+def apply_theme(sb: dict) -> None:
+    global PRIMARY, TAG, ON_PRIMARY, ON_TAG, BASE, CHIP, HIGHLIGHT
+    th = resolve_theme(sb)
+    PRIMARY, TAG, BASE, HIGHLIGHT = th["primary"], th["tag"], th["base"], th["highlight"]
+    ON_PRIMARY, ON_TAG = on(PRIMARY), on(TAG)
+    CHIP = tuple(round(c * 0.8) for c in BASE) + (215,)
 
 
 # ---------------------------------------------------------------- drawing helpers
@@ -77,7 +132,7 @@ def fade(img: Image.Image, a: float) -> Image.Image:
 
 
 def logo_bug(channel: str, size: int = 30) -> Image.Image:
-    a = block("NEWS", size, WHITE, RED)
+    a = block("NEWS", size, ON_PRIMARY, PRIMARY)
     b = block(channel, size, INK, WHITE)
     img = Image.new("RGBA", (a.width + b.width, max(a.height, b.height)), (0, 0, 0, 0))
     img.alpha_composite(a, (0, (img.height - a.height) // 2))
@@ -131,16 +186,16 @@ def draw_el(frame: Image.Image, el: El, t: float) -> None:
 
 
 def lower_third(sc: dict, t0: float, t_out: float, sfx: list) -> list[El]:
-    tag = block(sc["tag"], 30, WHITE, RED)
-    title = text_image(sc["title"], 50, "Bold", INK, max_w=R - L - 64, align="left", line_gap=1.4, highlight=RED)
+    tag = block(sc["tag"], 30, ON_TAG, TAG)
+    title = text_image(sc["title"], 50, "Bold", INK, max_w=R - L - 64, align="left", line_gap=1.4, highlight=PRIMARY if on(PRIMARY) == WHITE else INK)
     bar = Image.new("RGBA", (R - L, title.height + 24), WHITE + (255,))
-    ImageDraw.Draw(bar).rectangle((0, 0, 11, bar.height), fill=RED)
+    ImageDraw.Draw(bar).rectangle((0, 0, 11, bar.height), fill=PRIMARY)
     bar.alpha_composite(title, (34, 12))
     els = [El(tag, L, TAG_Y, t0, "left", t_out), El(bar, L, TAG_Y + tag.height, t0 + 0.12, "wipe", t_out)]
     bottom = TAG_Y + tag.height + bar.height
     if sub := sc.get("subtitle"):
         s = text_image(sub, 30, "Medium", SOFT, max_w=R - L - 64, align="left", line_gap=1.35)
-        strip = Image.new("RGBA", (R - L, s.height + 14), NAVY + (240,))
+        strip = Image.new("RGBA", (R - L, s.height + 14), BASE + (240,))
         strip.alpha_composite(s, (34, 7))
         els.append(El(strip, L, bottom, t0 + 0.3, "fade", t_out))
         bottom += strip.height
@@ -158,14 +213,14 @@ def fact_chips(sc: dict, at, t_out: float, sfx: list) -> list[El]:
         lead = 0
         chip = Image.new("RGBA", (t.width + 44 + (62 if sc.get("numbered") else 0), t.height + 14), (0, 0, 0, 0))
         d = ImageDraw.Draw(chip)
-        d.rectangle((0, 0, chip.width, chip.height), fill=(8, 12, 26, 215))
+        d.rectangle((0, 0, chip.width, chip.height), fill=CHIP)
         if sc.get("numbered"):
-            d.rectangle((0, 0, 50, chip.height), fill=RED)
-            n = text_image(str(i), 32, "Bold", WHITE, line_gap=1.2)
+            d.rectangle((0, 0, 50, chip.height), fill=PRIMARY)
+            n = text_image(str(i), 32, "Bold", ON_PRIMARY, line_gap=1.2)
             chip.alpha_composite(n, ((50 - n.width) // 2, (chip.height - n.height) // 2))
             lead = 62
         else:
-            d.rectangle((0, 0, 7, chip.height), fill=RED)
+            d.rectangle((0, 0, 7, chip.height), fill=PRIMARY)
             lead = 8
         chip.alpha_composite(t, (lead + 14, 7))
         k = seen[line] = seen.get(line, -1) + 1
@@ -202,7 +257,7 @@ def band(text: str, size: int, fg, bg, height: int) -> Image.Image:
 
 def build_intro(sb: dict, sfx: list) -> list[El]:
     first = sb["scenes"][0]
-    red = band(sb.get("channel", "ព័ត៌មាន"), 84, WHITE, RED, 190)
+    red = band(sb.get("channel", "ព័ត៌មាន"), 84, ON_PRIMARY, PRIMARY, 190)
     white = band(" · ".join(x for x in (first.get("tag"), sb.get("date")) if x), 38, INK, WHITE, 96)
     head = shadowed(text_image(first["title"], 66, "Bold", WHITE, max_w=R - L, line_gap=1.4, highlight=HIGHLIGHT))
     sfx += [(0.0, "riser"), (0.5, "impact"), (0.85, "swish")]
@@ -213,7 +268,7 @@ def build_intro(sb: dict, sfx: list) -> list[El]:
 def build_outro(sb: dict, t0: float, total: float, sfx: list) -> list[El]:
     o = sb.get("outro", {})
     bug = logo_bug(sb.get("channel", "ព័ត៌មាន"), 40)
-    red = band(o.get("text", "តាមដានសម្រាប់ព័ត៌មានបន្ថែម"), 60, WHITE, RED, 190)
+    red = band(o.get("text", "តាមដានសម្រាប់ព័ត៌មានបន្ថែម"), 60, ON_PRIMARY, PRIMARY, 190)
     white = band(o.get("subtitle", "Follow for more news"), 38, INK, WHITE, 96)
     els = [El(bug, (W - bug.width) // 2, 520, t0, "pop", total + 1), El(red, 0, 640, t0 + 0.15, "wipe", total + 1),
            El(white, 0, 830, t0 + 0.4, "wipe", total + 1)]
@@ -233,7 +288,7 @@ def load_shot(path: Path, t0: float, idx: int) -> Shot:
     small = src.resize((int(src.width * s / 4) + 1, int(src.height * s / 4) + 1), Image.BILINEAR)
     small = small.filter(ImageFilter.GaussianBlur(10)).resize((int(src.width * s), int(src.height * s)), Image.BILINEAR)
     bg = small.crop(((small.width - W) // 2, (small.height - H) // 2, (small.width - W) // 2 + W, (small.height - H) // 2 + H))
-    bg = Image.blend(bg, Image.new("RGB", (W, H), NAVY), 0.55).convert("RGBA")
+    bg = Image.blend(bg, Image.new("RGB", (W, H), BASE), 0.55).convert("RGBA")
     return Shot(t0, 0, src, bg, fit, idx)
 
 
@@ -348,16 +403,17 @@ def render_frame(n: int) -> bytes:
 
 
 def prepare(sb: dict, root: Path):
+    apply_theme(sb)
     els, shots, captions, sfx, t_outro, total = build_timeline(sb, root)
     ov = np.zeros((H, 1, 4), np.float32)
-    ov[:, :, :3] = NAVY
+    ov[:, :, :3] = BASE
     y = np.arange(H)
     ov[:, 0, 3] = np.clip(np.where(y < 380, 150 * (1 - y / 380), 0)
                           + np.clip((y - 820) / 360, 0, 1) * 215, 0, 235)
     overlay = Image.fromarray(np.repeat(ov, W, axis=1).astype(np.uint8), "RGBA")
 
-    label = Image.new("RGBA", (CROP_X + LABEL_W, TICKER_H), RED + (255,))  # text inside the side crop
-    lt = text_image(sb.get("ticker_label", "ព័ត៌មានថ្មី"), 30, "Bold", WHITE, line_gap=1.3)
+    label = Image.new("RGBA", (CROP_X + LABEL_W, TICKER_H), PRIMARY + (255,))  # text inside the side crop
+    lt = text_image(sb.get("ticker_label", "ព័ត៌មានថ្មី"), 30, "Bold", ON_PRIMARY, line_gap=1.3)
     label.alpha_composite(lt, (CROP_X + (LABEL_W - lt.width) // 2, (TICKER_H - lt.height) // 2))
     tt = text_image("     •     ".join(sb.get("ticker", [])) + "     •     ", 30, "Medium", WHITE,
                     max_w=100_000, align="left", line_gap=1.3)
@@ -374,7 +430,7 @@ def prepare(sb: dict, root: Path):
         bug=logo_bug(sb.get("channel", "ព័ត៌មាន")),
         date=shadowed(text_image(sb.get("date", ""), 26, "Medium", WHITE, align="left", line_gap=1.3)),
         disclosure=block(disclosure, 24, WHITE, (60, 66, 84), weight="Medium", pad_x=14, pad_y=6) if disclosure else None,
-        ticker_bg=Image.new("RGBA", (W, TICKER_H), NAVY + (245,)), ticker_label=label, ticker_loop=loop,
+        ticker_bg=Image.new("RGBA", (W, TICKER_H), BASE + (245,)), ticker_label=label, ticker_loop=loop,
     )
     return sfx, total
 
@@ -406,6 +462,7 @@ def mix_audio(narration: Path, sfx: list, total: float, out: Path, sfx_gain_db: 
     voice, sr = sf.read(str(narration), dtype="float32")
     mix = np.zeros(int(total * sr) + sr, dtype=np.float32)
     start = int(INTRO * sr)
+    voice = voice[: max(0, len(mix) - start)]  # --seconds previews cut the narration short
     mix[start: start + len(voice)] += voice
     gain = 10 ** (sfx_gain_db / 20)
     cache: dict = {}
@@ -445,7 +502,7 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
         stdin=subprocess.PIPE,
     )
     ctx = mp.get_context("fork")
-    with ctx.Pool(workers or max(1, mp.cpu_count() - 2)) as pool:
+    with ctx.Pool(workers or default_workers()) as pool:
         for i, frame in enumerate(pool.imap(render_frame, range(n_frames), chunksize=8)):
             ff.stdin.write(frame)
             if i % (FPS * 10) == 0:

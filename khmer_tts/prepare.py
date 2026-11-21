@@ -132,7 +132,7 @@ def clean_line(line: str) -> str:
     line = EMOJI.sub("", line)
     line = re.sub(r"\(([^()ក-៿]*)\)", "", line)  # (Oxfam), (UNESCO): Latin-only brackets
     line = re.sub(r"[()\[\]«»“”\"'‘’]", "", line)
-    line = re.sub(r"^\s*(?:[-*•·▪●○►✓✔]+|\d+[.)]|[០-៩]+[.)])\s*", lambda m: _list_marker(m.group(0)), line)
+    line = re.sub(r"^\s*[-*•·▪●○►✓✔]+\s*", "", line)  # bullets (numbered markers stay, see to_speech)
     line = line.replace("៖", " ").replace("—", " ").replace("–", " ")
     line = re.sub(r"\s*\.{3}|…", " ", line)
     line = re.sub(rf"\s+([{SENTENCE_END}])", r"\1", line)
@@ -182,6 +182,8 @@ def breakable(ws: list[tuple[str, bool]], k: int) -> bool:
         return False
     if NUMBER_WORD.match(prev) and NUMBER_WORD.match(word):  # inside a spelled-out number
         return False
+    if prev.endswith((",", ".")) and re.match(r"[0-9០-៩]", word):  # inside 21,46 / 625,000
+        return False
     return not prev.endswith(LEADS_IN)
 
 
@@ -225,24 +227,40 @@ def split_long(sentence: str, max_len: int, min_len: int) -> list[str]:
 
 # ---------------------------------------------------------------- whole text
 
+def to_speech(line: str) -> str:
+    """A display line → what the voice reads: list numbers, numbers and ៗ written out as Khmer words."""
+    line = re.sub(rf"^\s*{D}+[.)]\s*", lambda m: _list_marker(m.group(0)), line)
+    return re.sub(r"\s+", " ", expand_repeat(expand_numbers(line))).strip()
+
+
+def to_caption(line: str) -> str:
+    return line.rstrip("។៕ ")
+
+
 @dataclass
 class Prepared:
-    lines: list[str]
-    english: list[str] = field(default_factory=list)  # Latin words left in; check how they sound
-    dropped: list[str] = field(default_factory=list)  # meta lines not read out
+    lines: list[str]                                     # what the voice reads, one phrase per line
+    captions: list[str] = field(default_factory=list)    # the same lines as shown on screen (digits, ៗ, no ។)
+    paragraphs: list[int] = field(default_factory=list)  # source paragraph index of each line
+    english: list[str] = field(default_factory=list)     # Latin words left in; check how they sound
+    dropped: list[str] = field(default_factory=list)     # meta lines not read out
     segmented: bool = True
 
 
 def prepare_text(raw: str, max_len: int = 60, min_len: int = 14) -> Prepared:
-    out, dropped = [], []
-    for para in raw.splitlines():
-        if not para.strip():
-            continue
+    """Lines are cut on the display text (digits still short) so captions and TTS lines match 1:1;
+    the cut leaves room for numbers growing when written out."""
+    res = Prepared([], segmented=segmenter() is not None)
+    paras = [p for p in raw.splitlines() if p.strip()]
+    for n, para in enumerate(paras):
         if is_meta(para):
-            dropped.append(para.strip())
+            res.dropped.append(para.strip())
             continue
-        text = expand_repeat(expand_numbers(clean_line(para)))
-        for sent in split_sentences(text):
-            out += [ln for ln in split_long(sent, max_len, min_len) if re.search(r"[ក-៿A-Za-z]", ln)]
-    english = sorted({w for ln in out for w in re.findall(r"[A-Za-z][A-Za-z'.-]*", ln)}, key=str.lower)
-    return Prepared(out, english, dropped, segmenter() is not None)
+        for sent in split_sentences(clean_line(para)):
+            for ln in split_long(sent, max_len - 10, min_len):
+                if re.search(r"[\u1780-\u17ffA-Za-z]", ln):
+                    res.lines.append(to_speech(ln))
+                    res.captions.append(to_caption(ln))
+                    res.paragraphs.append(n)
+    res.english = sorted({w for ln in res.lines for w in re.findall(r"[A-Za-z][A-Za-z'.-]*", ln)}, key=str.lower)
+    return res

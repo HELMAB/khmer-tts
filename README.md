@@ -53,10 +53,27 @@ sudo ln -s /opt/homebrew/lib/libfribidi.dylib /usr/local/lib/
 ktts voices                                      # list available voices
 ktts speak --voice rfi "សួស្តីបងប្អូនទាំងអស់គ្នា។"     # say one sentence
 ktts read  --voice rfi texts/article.txt         # read a whole text file
-ktts video videos/my_video.json                  # make a TikTok video
+ktts make  --voice rfi texts/article.txt         # text -> narrated TikTok video
 ```
 
 Results are saved in `outputs/`.
+
+## One command: text to video
+
+```sh
+ktts make texts/article.txt --voice rfi                                # explainer style
+ktts make texts/article.txt --voice rfi --images videos/images/my_news # news style with your photos
+```
+
+It prepares the text, adds a spoken greeting and sign-off, records the voice, writes the storyboard and
+renders `outputs/video_article/tiktok_rfi.mp4`. Use `--kind tutorial`, `promo` or `advice` for other kinds of video.
+News-style videos take the news site's branding colours from the article URL (storyboard `source`; sites are listed in
+`SITE_THEMES` in `khmer_tts/news_video.py`, e.g. Thmey Thmey blue and red); a storyboard `theme` overrides them.
+
+Every step leaves a file you can edit: `texts/article_tts.txt` (what is read) and `videos/article.json`
+(scenes, captions, on-screen facts). Edit them and run the same command again. Only the lines you changed
+are re-recorded, so a fix takes about a minute instead of the whole narration. `--redo` rebuilds both files
+from the source.
 
 ## Make videos with Claude Code
 

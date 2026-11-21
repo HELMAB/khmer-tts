@@ -8,6 +8,7 @@
     read   --voice NAME texts/article.txt    read a whole prepared article
     vits   "text"                            baseline single-voice VITS model
     video  videos/STORYBOARD.json            vertical explainer video from a narrated article
+    make   texts/article.txt --voice NAME    all of it: prepare, narrate, storyboard, video
 """
 from __future__ import annotations
 
@@ -82,11 +83,11 @@ def cmd_read(args) -> None:
     voice = Voice.load(args.voice)
     text_file = Path(args.text_file)
     out_dir = Path(args.out_dir) if args.out_dir else OUTPUTS_DIR / f"{text_file.stem}_{voice.name}"
-    tts = VoxPocket(cfg=args.cfg, steps=args.steps)
-    report = read_article(tts, voice, text_file, out_dir, tries=args.tries,
-                          short_pause=args.short_pause, long_pause=args.long_pause)
-    print(f"Wrote {report.output}: {report.duration:.1f}s audio in {report.seconds_taken:.0f}s; "
-          f"parts in {report.output.parent / 'parts'}/")
+    report = read_article(lambda: VoxPocket(cfg=args.cfg, steps=args.steps), voice, text_file, out_dir,
+                          tries=args.tries, short_pause=args.short_pause, long_pause=args.long_pause,
+                          reuse=not args.fresh)
+    print(f"Wrote {report.output}: {report.duration:.1f}s audio in {report.seconds_taken:.0f}s "
+          f"({report.reused} unchanged lines reused); parts in {report.output.parent / 'parts'}/")
     if report.flagged_lines:
         print(f"Lines that may be cut short: {report.flagged_lines}")
 
@@ -130,9 +131,27 @@ def cmd_video(args) -> None:
             render_still(sb, t, out, narration=args.narration)
             print(out)
         return
-    out, total, n_sfx = render(sb, Path(args.output) if args.output else None, seconds=args.seconds,
-                               narration=args.narration)
+    out, total, n_sfx = render(sb, Path(args.output) if args.output else None, workers=args.workers,
+                               seconds=args.seconds, narration=args.narration)
     print(f"Wrote {out}: {total:.1f}s, {n_sfx} sound effects")
+
+
+def cmd_make(args) -> None:
+    from .make import make
+
+    r = make(Path(args.source), args.voice, kind=args.kind, images_dir=Path(args.images) if args.images else None,
+             accent=args.accent, redo=args.redo, render_video=not args.no_video, workers=args.workers,
+             seconds=args.seconds)
+    print()
+    if r.get("video"):
+        print(f"Video:      {r['video']}" + (f" ({r['video_seconds']:.0f}s)" if r.get("video_seconds") else ""))
+    print(f"Narration:  {r['narration']}")
+    print(f"Edit:       {r['tts_text']} (what is read) and {r['storyboard']} (scenes, captions)")
+    print("            then run the same command again: only changed lines are re-voiced")
+    if r.get("flagged"):
+        print(f"Listen to:  lines {r['flagged']} (may be cut short)")
+    if r.get("english"):
+        print("English:    " + ", ".join(r["english"]) + " (kept as written; check how they sound)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -175,6 +194,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--tries", type=int, default=3, help="seeds to try when a line comes out too short")
     p.add_argument("--short-pause", type=float, default=0.25)
     p.add_argument("--long-pause", type=float, default=0.6)
+    p.add_argument("--fresh", action="store_true", help="regenerate every line, even unchanged ones")
     p.set_defaults(func=cmd_read)
 
     p = sub.add_parser("prepare", help="turn raw text into short TTS-ready lines")
@@ -196,7 +216,21 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--still", type=float, nargs="+", metavar="SEC", help="only render frames at these times (PNG)")
     p.add_argument("--seconds", type=float, help="render only the first N seconds (quick preview)")
     p.add_argument("--narration", help="use another `read` output folder instead of the storyboard's (e.g. another voice)")
+    p.add_argument("--workers", type=int, help="render processes (default: by CPU count and free memory)")
     p.set_defaults(func=cmd_video)
+
+    p = sub.add_parser("make", help="text → narration → storyboard → video, in one command")
+    p.add_argument("source", help="raw text file (article, script)")
+    p.add_argument("--voice", required=True)
+    p.add_argument("--kind", choices=["news", "tutorial", "promo", "advice"], default="news",
+                   help="sets the spoken greeting/sign-off and on-screen labels (default news)")
+    p.add_argument("--images", help="folder of photos: broadcast news style with these photos")
+    p.add_argument("--accent", help="theme colour, e.g. #F05032")
+    p.add_argument("--redo", action="store_true", help="rebuild the TTS text and storyboard from the source")
+    p.add_argument("--no-video", action="store_true", help="stop after the narration")
+    p.add_argument("--seconds", type=float, help="render only the first N seconds (quick preview)")
+    p.add_argument("--workers", type=int, help="render processes (default: by CPU count and free memory)")
+    p.set_defaults(func=cmd_make)
     return parser
 
 
