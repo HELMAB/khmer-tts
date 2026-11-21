@@ -140,12 +140,17 @@ Voices are saved in `voices/<name>/` and show up in `ktts voices`.
 
 ## Tips for long text
 
-The model reads short phrases best. Before using `ktts read`:
+The model reads short phrases best, and can't read digits or symbols. `ktts prepare` fixes this for you:
 
-- Put **one short phrase per line**
-- Write numbers as words (`២៩` → `ម្ភៃប្រាំបួន`)
-- Write `ៗ` out in full (`សំខាន់ៗ` → `សំខាន់សំខាន់`)
-- Remove English text in brackets and bullet symbols
+```sh
+ktts prepare texts/article.txt        # -> texts/article_tts.txt
+ktts read --voice rfi texts/article_tts.txt
+```
+
+It puts **one short phrase per line**, writes numbers, dates, times, `%` and `$` as Khmer words
+(`២៩` → `ម្ភៃប្រាំបួន`, `18/11/2026` → `ថ្ងៃទីដប់ប្រាំបី ខែវិច្ឆិកា ឆ្នាំពីរពាន់ម្ភៃប្រាំមួយ`), writes `ៗ` out in full
+(`សំខាន់ៗ` → `សំខាន់សំខាន់`), and removes links, source lines, bullets and English text in brackets.
+Read the result once before using it: remove the title and byline if you don't want them spoken.
 
 Each line is saved separately in `parts/`, so you can redo a single bad line.
 
@@ -154,6 +159,5 @@ Each line is saved separately in `parts/`, so you can redo a single bad line.
 | Voice | Description |
 |-------|-------------|
 | `rfi` | RFI Khmer news reader |
-| `preapsovath` | Preap Sovath, interview clip (`preapsovath_clean` = cleaned audio) |
 | `general` | Tech TikTok narrator |
 | `advice` | Calm life-advice narrator |

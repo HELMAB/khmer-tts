@@ -7,3 +7,4 @@ huggingface_hub
 soundfile
 numpy
 pillow
+khmer-nltk  # Khmer word segmentation (line breaks, ៗ)

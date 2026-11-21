@@ -36,8 +36,11 @@ tech-TikTok) for coding tutorials. Say which you picked; any narration can be sw
 2. **Short input (a sentence or two):** `$KT speak --voice NAME "..."` → `outputs/samples_NAME/`.
    Pass a distinct `--prefix` so earlier samples are not overwritten.
 3. **A text file or anything longer than ~2 lines:** never feed raw paragraphs to the model.
-   Write a prepared copy next to it as `texts/<stem>_tts.txt` (keep the user's original untouched),
-   then `$KT read --voice NAME texts/<stem>_tts.txt --out-dir outputs/<stem>_NAME`.
+   Write a prepared copy next to it as `texts/<stem>_tts.txt` (keep the user's original untouched):
+   start with `$KT prepare texts/<stem>.txt` (numbers, dates, %, $, ៗ, URLs, bullets, brackets and short
+   lines are done for you), then read the result and edit by hand what it can't judge: drop the title/byline
+   lines, add the greeting and sign-off, fix typos in the source, and split any line that still reads long.
+   Then `$KT read --voice NAME texts/<stem>_tts.txt --out-dir outputs/<stem>_NAME`.
 4. Report: output path, duration, any lines listed under "Lines that may be cut short", and every
    editorial change you made while preparing the text. The user must listen; you cannot.
 
@@ -150,7 +153,7 @@ A wrong transcript is the main cause of a bad clone.
    Measure the raw clip first:
    `ffmpeg -i SOURCE -ss S -t D -af "astats=metadata=0,ebur128=framelog=quiet" -f null - 2>&1 | grep -E "Noise floor dB|^ +I:"`
    - Noise floor above about -55 dB, or loudness below about -25 LUFS → use `--clean`
-     (e.g. `preapsovath`: -48 dB / -29 LUFS gave quieter-sounding, inconsistent clones; cleaned output came out 6-12 dB louder and steadier).
+     (e.g. a quiet interview clip at -48 dB / -29 LUFS gave quieter-sounding, inconsistent clones; cleaned output came out 6-12 dB louder and steadier).
    - Clean broadcast audio (e.g. `rfi`: -69 dB / -15 LUFS) → skip it; cleaning only risks artefacts.
    - Background music under speech: `--clean` won't remove it. Signs: few pauses found, and the 100 ms RMS
      between words stays within ~10 dB of the speech (e.g. `advice`: -33..-44 dB floor vs -29 LUFS speech).

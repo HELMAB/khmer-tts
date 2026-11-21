@@ -4,6 +4,7 @@
     clips SOURCE                             suggest reference clips (speech between pauses)
     add-voice NAME SOURCE --text "..."       register a voice from a recording
     speak  --voice NAME "text" ["text" ...]  say a few sentences in a cloned voice
+    prepare texts/raw.txt                    turn raw text into short TTS lines (-> texts/raw_tts.txt)
     read   --voice NAME texts/article.txt    read a whole prepared article
     vits   "text"                            baseline single-voice VITS model
     video  videos/STORYBOARD.json            vertical explainer video from a narrated article
@@ -100,6 +101,24 @@ def cmd_vits(args) -> None:
     print(f"Wrote {out}: {result.duration:.2f}s @ {result.sample_rate} Hz in {result.seconds_taken:.2f}s")
 
 
+def cmd_prepare(args) -> None:
+    from .prepare import prepare_text
+
+    src = Path(args.text_file)
+    out = Path(args.output) if args.output else src.with_name(src.stem + "_tts.txt")
+    if out.exists() and not args.overwrite:
+        raise SystemExit(f"{out} exists (use --overwrite)")
+    result = prepare_text(src.read_text(encoding="utf-8"), max_len=args.max_len)
+    out.write_text("\n".join(result.lines) + "\n", encoding="utf-8")
+    print(f"Wrote {out}: {len(result.lines)} lines")
+    if not result.segmented:
+        print("  note: install khmer-nltk for better line breaks and ៗ handling")
+    if result.dropped:
+        print(f"  skipped {len(result.dropped)} source/link line(s): " + " | ".join(d[:50] for d in result.dropped))
+    if result.english:
+        print("  English words kept (listen to these lines after `read`): " + ", ".join(result.english))
+
+
 def cmd_video(args) -> None:
     from .video import render, render_still
 
@@ -157,6 +176,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--short-pause", type=float, default=0.25)
     p.add_argument("--long-pause", type=float, default=0.6)
     p.set_defaults(func=cmd_read)
+
+    p = sub.add_parser("prepare", help="turn raw text into short TTS-ready lines")
+    p.add_argument("text_file")
+    p.add_argument("-o", "--output", help="default: <text_file>_tts.txt next to it")
+    p.add_argument("--max-len", type=int, default=60, help="longest line in characters (default 60)")
+    p.add_argument("--overwrite", action="store_true")
+    p.set_defaults(func=cmd_prepare)
 
     p = sub.add_parser("vits", help="baseline single-voice VITS model (no cloning)")
     p.add_argument("text")
