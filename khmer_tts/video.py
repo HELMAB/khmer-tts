@@ -439,8 +439,13 @@ SYMBOLS = "✓"  # missing from Dank Mono; drawn with Menlo instead
 
 @lru_cache(maxsize=None)
 def symbol_font(size: int) -> ImageFont.FreeTypeFont:
-    out = subprocess.run(["fc-match", "-f", "%{file}", "Menlo"], capture_output=True, text=True)
-    return ImageFont.truetype(out.stdout.strip(), size)
+    """Menlo on macOS, DejaVu Sans Mono on Linux (fc-match substitutes silently, so check the glyph)."""
+    for family in ("Menlo", "DejaVu Sans Mono", "Noto Sans Symbols 2"):
+        path = subprocess.run(["fc-match", "-f", "%{file}", family], capture_output=True, text=True).stdout.strip()
+        f = ImageFont.truetype(path, size)
+        if all(f.getmask(c).getbbox() and f.getmask(c).size != f.getmask("￿").size for c in SYMBOLS):
+            return f
+    return f
 
 
 LIGATURES = ["liga", "calt"]
