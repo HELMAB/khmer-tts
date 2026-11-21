@@ -88,20 +88,55 @@ Make a 60-second promotion video in Khmer for my app Sevakam, a marketplace for 
 Use the advice voice and end with a call to sign up.
 ```
 
-## Add your own voice
+## Clone a new voice
 
-1. Find a clean 4–9 second part of a recording (no music, ends on a pause).
-2. Write down **exactly** what is said in it.
-3. Add it:
+You only need a short recording of one person speaking Khmer: a video, podcast, voice message or
+news clip (mp3, wav, m4a, mp4…).
 
-```sh
-ktts add-voice myvoice recording.mp3 --start 0 --duration 5 --text "what is said in the clip"
+### The easy way: ask Claude Code
+
+```text
+Clone a new voice called "sokha" from recordings/sokha.mp3
 ```
 
-Tips:
-- Not sure where to cut? `ktts clips recording.mp3` suggests good clips.
-- Noisy or quiet recording? Add `--clean`.
-- A wrong transcript is the most common cause of a bad voice.
+It finds a good clip, writes down what is said, adds the voice and plays a test sentence for you.
+
+### By hand
+
+**1. Find a good clip.** Pick 4–9 seconds where only one person speaks: no music, no background noise,
+and the clip ends on a pause. This command lists good places to cut:
+
+```sh
+ktts clips recordings/sokha.mp3
+```
+
+**2. Write down exactly what is said** in that clip, word for word, in Khmer.
+
+**3. Add the voice.** Use the start time and length of your clip:
+
+```sh
+ktts add-voice sokha recordings/sokha.mp3 --start 12.5 --duration 6 \
+    --text "ពាក្យដែលនិយាយក្នុងឃ្លីបនេះ"
+```
+
+For a noisy or quiet recording, add `--clean`. Leave it off for clean audio: the model copies the
+cleaning sound too.
+
+**4. Test it:**
+
+```sh
+ktts speak --voice sokha "សួស្តីបងប្អូនទាំងអស់គ្នា។"
+```
+
+Listen to the result in `outputs/samples_sokha/`. To try a different clip, run step 3 again with
+`--overwrite`.
+
+**If the voice sounds wrong:**
+- Check the transcript first. A wrong word is the most common cause of a bad clone.
+- Try another clip that is clearer, or 1–2 seconds longer or shorter.
+- Try with and without `--clean` and keep whichever sounds better.
+
+Voices are saved in `voices/<name>/` and show up in `ktts voices`.
 
 ## Tips for long text
 
