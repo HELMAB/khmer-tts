@@ -331,7 +331,7 @@ def build_title(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
     return els
 
 
-def build_headline(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
+def build_headline(scene: dict, brands: dict, at, sfx: list, root: Path = PROJECT_ROOT) -> list[Element]:
     """News-style intro: kicker label, big headline, subtitle, then numbered key points."""
     t0 = at(scene["line"])
     accent = hex_rgb(brands["b"]["color"])
@@ -355,6 +355,8 @@ def build_headline(scene: dict, brands: dict, at, sfx: list) -> list[Element]:
         els.append(Element(row, MARGIN, y, at(line) + 0.1 * (i - 1), dy=24))
         sfx.append((at(line) + 0.1 * (i - 1), "pop"))
         y += row.height + 14
+    if icons := scene.get("icons"):  # a row of icon tiles under the text (place `media_y` below it)
+        els += build_icon_row(icons, scene.get("icons_y", y + 20), at, sfx, root)
     return els
 
 
@@ -563,6 +565,30 @@ def build_media(media: dict, top: int, max_h: int, at, sfx: list, root: Path) ->
 SHADOW = 30
 
 
+@lru_cache(maxsize=None)
+def icon_tile(path: Path, size: int) -> Image.Image:
+    """App-icon style tile: an icon (e.g. a PNG from IconScout) centred on a rounded dark card with an accent ring."""
+    tile = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    ImageDraw.Draw(tile).rounded_rectangle((0, 0, size - 1, size - 1), radius=size // 4, fill=WIN_BAR + (255,),
+                                           outline=HIGHLIGHT + (200,), width=4)
+    icon = Image.open(path).convert("RGBA")
+    icon.thumbnail((int(size * 0.62), int(size * 0.62)), Image.LANCZOS)
+    tile.alpha_composite(icon, ((size - icon.width) // 2, (size - icon.height) // 2))
+    return shadow(tile)
+
+
+def build_icon_row(icons: list, y: int, at, sfx: list, root: Path, size: int = 120) -> list[Element]:
+    """A centred row of icon tiles, each popping in at its line: [[file, line], ...]."""
+    gap = 28
+    x = CX - (len(icons) * size + (len(icons) - 1) * gap) // 2
+    els = []
+    for file, line in icons:
+        els.append(Element(icon_tile(root / file, size), x - SHADOW, y - SHADOW, at(line), dy=0, scale_in=True))
+        sfx.append((at(line), "pop"))
+        x += size + gap
+    return els
+
+
 def shadow(img: Image.Image) -> Image.Image:
     out = Image.new("RGBA", (img.width + 2 * SHADOW, img.height + 2 * SHADOW), (0, 0, 0, 0))
     sh = Image.new("RGBA", img.size, (0, 0, 0, 0))
@@ -583,6 +609,13 @@ def build_step(scene: dict, brands: dict, at, sfx: list, root: Path) -> list[Ele
         e, b = build_media(m, top, scene.get("media_h", 600), at, sfx, root)
         els += e
         bottom = max(bottom, b)
+    # stickers: icon tiles centred on the window's top edge at its right end (over the empty end of the title bar)
+    size = 120
+    x = CONTENT_R + 30 - size
+    for file, line in scene.get("stickers", []):
+        els.append(Element(icon_tile(root / file, size), x - SHADOW, top - size // 2 - SHADOW, at(line), dy=0, scale_in=True))
+        sfx.append((at(line), "pop"))
+        x -= size + 16
     color = hex_rgb(brands["a"]["color"])
     x, y = MARGIN, bottom + 26
     for text, line, *style in scene.get("items", []):
@@ -621,7 +654,7 @@ def build_timeline(sb: dict, root: Path):
         if kind == "title":
             els = build_title(s, sb["brands"], at, sfx)
         elif kind == "headline":
-            els = build_headline(s, sb["brands"], at, sfx)
+            els = build_headline(s, sb["brands"], at, sfx, root)
             if media := s.get("media"):  # a window under the headline, filling the space above the captions
                 els += build_media(media, s.get("media_y", 720), 1210 - s.get("media_y", 720), at, sfx, root)[0]
         elif kind == "step":
@@ -651,9 +684,10 @@ def build_timeline(sb: dict, root: Path):
         t0 = t_outro
         big = text_image(outro["text"], 70, "Bold", TEXT)
         sub = text_image(outro["subtitle"], 40, "Medium", HIGHLIGHT)
-        heart = check_icon(150, HIGHLIGHT + (255,))
+        # outro.icon: an icon tile (e.g. a rocket) in place of the check mark
+        heart = icon_tile(root / outro["icon"], 170) if outro.get("icon") else check_icon(150, HIGHLIGHT + (255,))
         scenes.append(Scene(t0, total + 1, [
-            Element(heart, CX - 75, 560, t0, dy=0, scale_in=True),
+            Element(heart, CX - heart.width // 2, 635 - heart.height // 2, t0, dy=0, scale_in=True),
             Element(big, CX - big.width // 2, 760, t0 + 0.15),
             Element(sub, CX - sub.width // 2, 760 + big.height + 10, t0 + 0.3),
         ]))
@@ -689,6 +723,73 @@ def make_background(glow_a=(255, 45, 32), glow_b=(109, 179, 63)) -> Image.Image:
     d.ellipse((bw - 600, bh - 1000, bw + 350, bh - 100), fill=glow_b + (55,))
     bg.alpha_composite(glow.filter(ImageFilter.GaussianBlur(190)))
     return bg
+
+
+def _dither(rgb: np.ndarray, seed: int = 0) -> Image.Image:
+    """Quantise a float image with fine noise so smooth gradients don't band in 8-bit/H.264."""
+    noise = np.random.default_rng(seed).normal(0, 1.4, rgb.shape[:2]).astype(np.float32)[..., None]
+    return Image.fromarray(np.clip(rgb + noise, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+
+
+def _blob(x, y, cx, cy, rx, ry):
+    return np.exp(-(((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2))
+
+
+def make_spotlight(glow_a, glow_b) -> Image.Image:
+    """Black stage, a soft accent light from the top centre, a faint dot grid under it (Vercel-like)."""
+    bw, bh = W + 160, H + 160
+    y, x = np.mgrid[0:bh, 0:bw].astype(np.float32)
+    a, b = np.array(glow_a, np.float32), np.array(glow_b, np.float32)
+    img = np.full((bh, bw, 3), 4.0, np.float32)
+    img += a * 0.30 * _blob(x, y, bw * 0.5, -bh * 0.05, bw * 0.55, bh * 0.38)[..., None]
+    img += b * 0.12 * _blob(x, y, bw * 0.5, bh * 1.02, bw * 0.7, bh * 0.25)[..., None]
+    dots = (((x % 36) - 18) ** 2 + ((y % 36) - 18) ** 2 < 2.2).astype(np.float32)
+    img += (dots * 42 * _blob(x, y, bw * 0.5, bh * 0.3, bw * 0.6, bh * 0.5))[..., None]
+    return _dither(img)
+
+
+def make_beams(glow_a, glow_b) -> Image.Image:
+    """Deep navy gradient crossed by two soft diagonal light beams in the brand colours."""
+    bw, bh = W + 160, H + 160
+    y, x = np.mgrid[0:bh, 0:bw].astype(np.float32)
+    a, b = np.array(glow_a, np.float32), np.array(glow_b, np.float32)
+    t = (y / bh)[..., None]
+    img = np.array((6, 8, 18), np.float32) * (1 - t) + np.array((3, 4, 10), np.float32) * t
+    for col, off, k in ((a, 0.15, 0.40), (b, 0.75, 0.32)):
+        d = (x * 0.6 - y * 0.8) / bh + off  # distance across a beam tilted ~37°
+        img = img + col * k * np.exp(-(d / 0.11) ** 2)[..., None] * (1 - 0.6 * t)
+    return _dither(img)
+
+
+class Aurora:
+    """Animated backdrop: a few large accent glows drifting on black, computed at 1/8 size and upscaled."""
+    S = 8
+
+    def __init__(self, glow_a, glow_b):
+        self.y, self.x = np.mgrid[0:H // self.S, 0:W // self.S].astype(np.float32) * self.S
+        self.cols = [np.array(c, np.float32) for c in (glow_a, glow_b, glow_a)]
+        self.grain = np.random.default_rng(0).normal(0, 1.4, (H, W, 1)).astype(np.float32)
+
+    def __call__(self, t: float) -> Image.Image:
+        img = np.full(self.x.shape + (3,), 3.0, np.float32)
+        for i, col in enumerate(self.cols):
+            cx = W * (0.5 + 0.45 * math.sin(t / (9 + 4 * i) + i * 2.1))
+            cy = H * (0.25 + 0.3 * i + 0.12 * math.cos(t / (11 + 3 * i) + i))
+            img += col * (0.34 if i != 1 else 0.30) * _blob(self.x, self.y, cx, cy, W * 0.55, H * 0.28)[..., None]
+        big = np.asarray(Image.fromarray(np.clip(img, 0, 255).astype(np.uint8), "RGB").resize((W, H), Image.BICUBIC),
+                         np.float32)
+        return Image.fromarray(np.clip(big + self.grain, 0, 255).astype(np.uint8), "RGB").convert("RGBA")
+
+
+def background(sb: dict):
+    """Storyboard "background": grid (default), spotlight, beams (static, drifting) or aurora (animated).
+    Returns a large still to crop from, or a callable t -> frame-sized image."""
+    a, b = hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])
+    style = sb.get("background", "grid")
+    makers = {"grid": make_background, "spotlight": make_spotlight, "beams": make_beams, "aurora": Aurora}
+    if style not in makers:
+        raise SystemExit(f"unknown background {style!r} ({', '.join(makers)})")
+    return makers[style](a, b)
 
 
 def ease_out(p: float) -> float:
@@ -736,7 +837,7 @@ def render_frame(n: int) -> bytes:
     t = n / FPS
     ox = int(80 + 60 * math.sin(t / 7))
     oy = int(80 + 60 * math.cos(t / 9))
-    frame = st["bg"].crop((ox, oy, ox + W, oy + H))
+    frame = st["bg"](t) if callable(st["bg"]) else st["bg"].crop((ox, oy, ox + W, oy + H))
 
     # top overlay: series badge + section counter
     frame.alpha_composite(st["badge"], (MARGIN, SAFE_TOP))
@@ -850,6 +951,9 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
     if sb.get("style") == "news":
         from .news_video import render as render_news
         return render_news(storyboard_path, out, workers, seconds, narration)
+    if sb.get("style") == "story":
+        from .story_video import render as render_story
+        return render_story(storyboard_path, out, workers, seconds)
     out = out or root / sb["output"]
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -859,7 +963,7 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
     counters = {sc.counter: pill(sc.counter, 30, ACCENT_INK, HIGHLIGHT + (255,), weight="Bold")
                 for sc in scenes if sc.counter}
-    _STATE.update(bg=make_background(hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])), badge=badge, counters=counters, scenes=scenes, captions=captions,
+    _STATE.update(bg=background(sb), badge=badge, counters=counters, scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)
 
     audio = out.with_suffix(".audio.wav")
@@ -893,10 +997,13 @@ def render_still(storyboard_path: Path, t: float, out: Path, narration: str | No
     if sb.get("style") == "news":
         from .news_video import render_still as still_news
         return still_news(storyboard_path, t, out, narration)
+    if sb.get("style") == "story":
+        from .story_video import render_still as still_story
+        return still_story(storyboard_path, t, out)
     scenes, captions, sfx, narration_end, total = build_timeline(sb, PROJECT_ROOT)
     badge = pill(sb["title"], 30, TEXT, (255, 255, 255, 26), outline=(255, 255, 255, 60))
     counters = {sc.counter: pill(sc.counter, 30, ACCENT_INK, HIGHLIGHT + (255,), weight="Bold")
                 for sc in scenes if sc.counter}
-    _STATE.update(bg=make_background(hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])), badge=badge, counters=counters, scenes=scenes, captions=captions,
+    _STATE.update(bg=background(sb), badge=badge, counters=counters, scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)
     Image.frombytes("RGB", (W, H), render_frame(int(t * FPS))).save(out)

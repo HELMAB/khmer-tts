@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Khmer TTS · Khmer text to speech in any voice, and TikTok videos</title>
-<meta name="description" content="Khmer TTS turns Khmer text into natural speech in a cloned voice, and turns articles into ready-to-post TikTok, Reels and Shorts videos with captions, from one command. និយាយភាសាខ្មែរ ដោយសំឡេងដែលអ្នកចង់បាន។">
-<meta name="keywords" content="Khmer TTS, Khmer text to speech, Khmer voice cloning, សំឡេងខ្មែរ, អានអត្ថបទខ្មែរ, AI voice Khmer, TikTok news video, VoxPocket">
+<title>Khmer TTS · Khmer text to speech in any voice, TikTok videos and Facebook Stories</title>
+<meta name="description" content="Khmer TTS turns Khmer text into natural speech in a cloned voice, and turns articles into ready-to-post TikTok, Reels and Shorts videos with captions, and a photo plus a song into a Facebook Story with timed lyrics, from one command. និយាយភាសាខ្មែរ ដោយសំឡេងដែលអ្នកចង់បាន។">
+<meta name="keywords" content="Khmer TTS, Khmer text to speech, Khmer voice cloning, សំឡេងខ្មែរ, អានអត្ថបទខ្មែរ, AI voice Khmer, TikTok news video, Facebook Story lyric video, Khmer karaoke lyrics, VoxPocket">
 <meta name="author" content="Hel Mab">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#07090f">
@@ -23,7 +23,7 @@
 <meta property="og:site_name" content="Khmer TTS">
 <meta property="og:url" content="https://khmer-xtts.vercel.app/">
 <meta property="og:title" content="Khmer TTS · និយាយភាសាខ្មែរ ដោយសំឡេងដែលអ្នកចង់បាន">
-<meta property="og:description" content="Clone a voice from a 5-second clip, read Khmer text aloud, and make TikTok news videos from one command.">
+<meta property="og:description" content="Clone a voice from a 5-second clip, read Khmer text aloud, make TikTok news videos, and turn a photo and a song into a Facebook Story with lyrics.">
 <meta property="og:image" content="https://khmer-xtts.vercel.app/media/og-image.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -32,7 +32,7 @@
 <meta property="og:locale:alternate" content="km_KH">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Khmer TTS · Khmer speech in any voice">
-<meta name="twitter:description" content="Clone a voice, read Khmer aloud, make TikTok news videos from one command.">
+<meta name="twitter:description" content="Clone a voice, read Khmer aloud, make TikTok news videos and Facebook Stories with lyrics.">
 <meta name="twitter:image" content="https://khmer-xtts.vercel.app/media/og-image.jpg">
 
 <script type="application/ld+json">
@@ -44,7 +44,7 @@
       "@id": "https://khmer-xtts.vercel.app/#app",
       "name": "Khmer TTS",
       "alternateName": "សំឡេងខ្មែរ AI",
-      "description": "Khmer text-to-speech with voice cloning, and a generator for vertical TikTok, Reels and Shorts videos with synced captions.",
+      "description": "Khmer text-to-speech with voice cloning, a generator for vertical TikTok, Reels and Shorts videos with synced captions, and Facebook Story music videos with lyrics timed to the singer.",
       "applicationCategory": "MultimediaApplication",
       "operatingSystem": "Linux, macOS",
       "inLanguage": ["km", "en"],
@@ -53,7 +53,7 @@
       "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
       "author": {"@type": "Person", "name": "Hel Mab"},
       "sameAs": ["https://github.com/HELMAB/khmer-xtts"],
-      "featureList": ["Voice cloning from a 4-9 second clip", "Khmer article narration", "TikTok / Reels / Shorts video rendering", "News-site branding colours", "Synthesized sound effects"]
+      "featureList": ["Voice cloning from a 4-9 second clip", "Khmer article narration", "TikTok / Reels / Shorts video rendering", "News-site branding colours", "Synthesized sound effects", "Facebook Story music videos with karaoke lyrics and a sound visualizer"]
     },
     {
       "@type": "WebSite",
@@ -81,6 +81,8 @@
          "acceptedAnswer": {"@type": "Answer", "text": "One speaker, 4 to 9 seconds of clean speech, and the exact words spoken in that clip."}},
         {"@type": "Question", "name": "What hardware does it need?",
          "acceptedAnswer": {"@type": "Answer", "text": "An NVIDIA GPU with 4 GB of memory or an Apple Silicon Mac, Python 3.12 and ffmpeg. The VoxPocket model (about 2 GB) downloads on first use and then runs on your own machine."}},
+        {"@type": "Question", "name": "Can it make a Facebook Story from a photo and a song?",
+         "acceptedAnswer": {"@type": "Answer", "text": "Yes. Give a photo and a song link: it separates the singing, times the lyrics to the singer, and renders a one-minute 1080x1920 Story with a gold karaoke fill, a sound visualizer and camera moves inside your photo. Use songs you are allowed to share; Facebook may mute commercial recordings, and its music sticker is the fallback."}},
         {"@type": "Question", "name": "Can I clone anyone's voice?",
          "acceptedAnswer": {"@type": "Answer", "text": "Only clone voices you have permission to use. Videos made with a cloned voice carry a សំឡេង AI tag; tick TikTok's AI-generated label when you post."}}
       ]
@@ -262,8 +264,19 @@ h2 small{overflow-wrap:anywhere;display:block;font-family:var(--body);text-trans
 .card ul{list-style:none;display:grid;gap:8px;color:#b6bfd1;font-size:15px}
 .card li{display:flex;gap:10px}
 .card li::before{content:"";flex:0 0 6px;height:6px;margin-top:10px;background:var(--onair);border-radius:1px}
-@media (max-width:1000px){.styles{grid-template-columns:1fr}}
-@media (max-width:520px){.card{grid-template-columns:1fr}.card .shot{max-width:220px}}
+.card.wide{grid-column:1/-1;grid-template-columns:200px minmax(0,1fr) minmax(0,1fr);border-color:#3a3320;background:linear-gradient(180deg,#14130d,#0a0d15)}
+.card.wide::before{background:radial-gradient(360px circle at var(--mx) var(--my),rgba(255,210,70,.12),transparent 60%)}
+.card.wide li::before{background:var(--gold)}
+.new{display:inline-block;vertical-align:.35em;margin-left:10px;font:600 11px/1 var(--mono);letter-spacing:.16em;padding:5px 8px;border-radius:3px;background:var(--gold);color:var(--ink)}
+.flow{list-style:none;display:grid;gap:10px;counter-reset:f}
+.flow li{display:flex;gap:14px;align-items:baseline;padding:12px 14px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.02)}
+.flow li::before{display:none}
+.flow b{font:600 12px/1 var(--mono);color:var(--gold);letter-spacing:.1em}
+.card.wide .one{margin-top:12px;font-size:13px;border-left-color:var(--gold);flex-wrap:nowrap;align-items:baseline;gap:10px}
+.card.wide .one .p{color:var(--gold)}
+.card.wide .one span:last-child{min-width:0;overflow-wrap:normal}
+@media (max-width:1000px){.styles{grid-template-columns:1fr}.card.wide{grid-template-columns:200px minmax(0,1fr)}.card.wide .flowcol{grid-column:1/-1}}
+@media (max-width:520px){.card,.card.wide{grid-template-columns:1fr}.card .shot{max-width:220px}.card.wide .flowcol{grid-column:auto}}
 
 /* brand swatches: lower thirds wipe in like the videos */
 .brands{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:28px}
@@ -311,7 +324,7 @@ h3.big{font-family:var(--display);font-weight:800;text-transform:uppercase;font-
 .term .copy{margin-left:auto;font:600 12px var(--mono);background:none;border:1px solid var(--line);color:var(--text);padding:6px 10px;border-radius:4px;cursor:pointer;transition:border-color .2s,color .2s}
 .term .copy:hover{border-color:var(--muted)}
 .term .copy.ok{color:#28c840;border-color:#28c840}
-.term pre{padding:22px 24px;overflow-x:auto;font:400 15px/1.85 var(--mono);color:#d7dcea;min-height:23em}
+.term pre{padding:22px 24px;overflow-x:auto;font:400 15px/1.85 var(--mono);color:#d7dcea;min-height:29em}
 .term .cm{color:#6d7790;font-style:italic}.term .pr{color:var(--onair)}.term .kh{font-family:var(--body)}
 @media (max-width:640px){.term pre{font-size:12.5px;padding:18px 16px;min-height:0}.one{font-size:13px}}
 .caret{display:inline-block;width:.6em;height:1.1em;background:var(--onair);vertical-align:-.2em;animation:blink 1s steps(1) infinite}
@@ -379,7 +392,7 @@ footer{border-top:1px solid var(--line);padding:46px 0 60px;color:var(--muted);f
         <p class="kicker fade-up d1">Khmer text to speech · any voice</p>
         <h1 id="h1"><span class="ln"><span>Khmer</span></span><span class="ln"><span>TTS</span></span></h1>
         <p class="km-tag fade-up d2" lang="km"><span class="ph">និយាយភាសាខ្មែរ</span> <span class="ph">ដោយសំឡេងដែលអ្នកចង់បាន</span></p>
-        <p class="lede fade-up d3">Clone a voice from a five-second clip, read whole Khmer articles aloud, and turn a news link into a ready-to-post TikTok, Reels or Shorts video, all from one command line.</p>
+        <p class="lede fade-up d3">Clone a voice from a five-second clip, read whole Khmer articles aloud, turn a news link into a ready-to-post TikTok, Reels or Shorts video, and a holiday photo plus a song into a Facebook Story with lyrics, all from one command line.</p>
         <div class="cta fade-up d4">
           <a class="btn primary" href="#start"><span lang="km">ចាប់ផ្តើម</span> · Get started
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
@@ -451,7 +464,7 @@ footer{border-top:1px solid var(--line);padding:46px 0 60px;color:var(--muted);f
     <div class="wrap">
       <div class="sec-head" data-reveal>
         <div class="num" data-n="02" aria-hidden="true">02</div>
-        <h2 id="h-styles">Two looks.<br>One storyboard.<small lang="km">រចនាបថ ព័ត៌មាន និងការពន្យល់</small></h2>
+        <h2 id="h-styles">Three looks.<br>One storyboard.<small lang="km">រចនាបថ ព័ត៌មាន ការពន្យល់ និង Facebook Story</small></h2>
       </div>
       <div class="styles">
         <article class="card" data-reveal style="--i:0">
@@ -476,6 +489,26 @@ footer{border-top:1px solid var(--line);padding:46px 0 60px;color:var(--muted);f
               <li>Code and terminal windows that type along with the voice</li>
               <li>Brand colours, chips that pop in as each word is said</li>
             </ul>
+          </div>
+        </article>
+        <article class="card wide" data-reveal style="--i:2">
+          <div class="shot"><img src="/media/story.jpg" width="540" height="960" alt="Facebook Story frame: a coconut palm photo in a floating card, a gold and green sound visualizer, and a karaoke line filling in gold as it is sung" loading="lazy"></div>
+          <div>
+            <h3>Story<span class="new">NEW</span></h3>
+            <div class="km" lang="km">Facebook Story ជាមួយបទចម្រៀង</div>
+            <ul>
+              <li>Your photo and a song link become a one-minute Story</li>
+              <li>Lyrics timed to the singer, filling in gold as each half-line is sung</li>
+              <li>A sound visualizer, camera moves through the photo and a warm colour grade</li>
+            </ul>
+          </div>
+          <div class="flowcol">
+            <ol class="flow">
+              <li><b>01</b><span>Song from a link: the voice is separated from the music</span></li>
+              <li><b>02</b><span>Lyrics from the video description, aligned to the singing</span></li>
+              <li><b>03</b><span>1080×1920 Story, safe from Facebook's top and bottom bars</span></li>
+            </ol>
+            <div class="one"><span class="p">$</span><span>ktts song "https://youtu.be/…" --out videos/audio/song</span></div>
           </div>
         </article>
       </div>
@@ -546,7 +579,11 @@ footer{border-top:1px solid var(--line);padding:46px 0 60px;color:var(--muted);f
 <span class="pr">$</span> ktts voices
 <span class="pr">$</span> ktts speak --voice rfi "<span class="kh" lang="km">សួស្តីបងប្អូនទាំងអស់គ្នា។</span>"
 <span class="pr">$</span> ktts read  --voice rfi texts/article.txt
-<span class="pr">$</span> ktts make  --voice rfi texts/article.txt</pre>
+<span class="pr">$</span> ktts make  --voice rfi texts/article.txt
+
+<span class="cm"># photo + song → Facebook Story with lyrics</span>
+<span class="pr">$</span> ktts song "https://youtu.be/…" --out videos/audio/song
+<span class="pr">$</span> ktts video videos/story.json</pre>
       </div>
       <div class="reqs" data-reveal>
         <span>Python 3.12</span><span>ffmpeg</span><span>NVIDIA GPU, 4 GB is enough</span><span>or Apple Silicon Mac</span><span>Google Sans font</span>
@@ -568,7 +605,9 @@ footer{border-top:1px solid var(--line);padding:46px 0 60px;color:var(--muted);f
           <div class="a">One speaker, 4 to 9 seconds of clean speech, and the exact words spoken in that clip. A wrong transcript is the main cause of a poor clone.</div></details>
         <details data-reveal style="--i:2"><summary><span>What hardware does it need?<small lang="km">ត្រូវការកុំព្យូទ័របែបណា?</small></span><span class="pl" aria-hidden="true"></span></summary>
           <div class="a">An NVIDIA GPU with 4 GB of memory or an Apple Silicon Mac, Python 3.12 and ffmpeg. The VoxPocket model (about 2 GB) downloads on first use and then runs on your own machine.</div></details>
-        <details data-reveal style="--i:3"><summary><span>Can I clone anyone's voice?<small lang="km">អាចចម្លងសំឡេងនរណាក៏បាន?</small></span><span class="pl" aria-hidden="true"></span></summary>
+        <details data-reveal style="--i:3"><summary><span>Can it make a Facebook Story from a photo and a song?<small lang="km">អាចធ្វើ Facebook Story ពីរូបថត និងបទចម្រៀងបានទេ?</small></span><span class="pl" aria-hidden="true"></span></summary>
+          <div class="a">Yes. Give a photo and a song link: it separates the singing, times the lyrics to the singer and renders a one-minute 1080×1920 Story with a gold karaoke fill, a sound visualizer and camera moves inside your photo. Use songs you are allowed to share; Facebook may mute commercial recordings, and its music sticker is the fallback.</div></details>
+        <details data-reveal style="--i:4"><summary><span>Can I clone anyone's voice?<small lang="km">អាចចម្លងសំឡេងនរណាក៏បាន?</small></span><span class="pl" aria-hidden="true"></span></summary>
           <div class="a">Only clone voices you have permission to use. Videos made with a cloned voice carry a <span lang="km">"សំឡេង AI"</span> tag; tick TikTok's AI-generated label when you post.</div></details>
       </div>
     </div>
@@ -651,7 +690,7 @@ hero.addEventListener('pointermove', e => {
 
 // ticker
 (() => {
-  const items = ["ចម្លងសំឡេង ពីឃ្លីប ៥ វិនាទី", "អានអត្ថបទខ្មែរទាំងមូល", "វីដេអូ TikTok ក្នុងពាក្យបញ្ជាតែមួយ", "ចំណងជើង ពេលវេលាត្រូវគ្នា", "ពណ៌តាមគេហទំព័រព័ត៌មាន", "English words stay English"];
+  const items = ["ចម្លងសំឡេង ពីឃ្លីប ៥ វិនាទី", "អានអត្ថបទខ្មែរទាំងមូល", "វីដេអូ TikTok ក្នុងពាក្យបញ្ជាតែមួយ", "ចំណងជើង ពេលវេលាត្រូវគ្នា", "ពណ៌តាមគេហទំព័រព័ត៌មាន", "Facebook Story ជាមួយបទចម្រៀង និងទំនុកច្រៀង", "English words stay English"];
   const t = document.getElementById('track'), html = items.map(x => `<span>${x}</span>`).join('');
   t.innerHTML = html + html;
 })();

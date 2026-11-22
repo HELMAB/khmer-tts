@@ -105,6 +105,16 @@ Make a 60-second promotion video in Khmer for my app Sevakam, a marketplace for 
 Use the advice voice and end with a call to sign up.
 ```
 
+**Facebook Story** from a photo and a song (lyrics, sound visualizer, camera moves; no voice needed):
+
+```text
+Make a 1-minute Facebook Story from photo.jpg with this song: https://www.youtube.com/watch?v=us7rjA44AIE
+```
+
+By hand: `python -m khmer_tts song URL --out videos/audio/<song>` (song, vocals, sung phrases), then
+`python -m khmer_tts song videos/audio/<song> --align lyrics.txt --from A --to B` (lyric timings), then
+write a `"style": "story"` storyboard (see `videos/hometown_story.json`) and run `python -m khmer_tts video` on it.
+
 ## Clone a new voice
 
 You only need a short recording of one person speaking Khmer: a video, podcast, voice message or

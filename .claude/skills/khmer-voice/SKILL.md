@@ -1,9 +1,9 @@
 ---
 name: khmer-voice
-description: Generate Khmer speech in a cloned voice, add (clone) a new voice from a recording, or turn a narrated text into a TikTok/Reels/Shorts explainer video, in the khmer-tts project. Use when the user asks to read, speak, voice, narrate or generate audio for Khmer text or a text file "using/with <voice>", to clone a voice from an mp3/wav, to add or list voices, to regenerate a bad line, or to make a vertical/TikTok video (captions, overlays, sound effects) from a text, a narration, a news article URL (e.g. thmeythmey.com) or a step-by-step tutorial (with browser screenshots, code and terminal windows).
+description: Generate Khmer speech in a cloned voice, add (clone) a new voice from a recording, turn a narrated text into a TikTok/Reels/Shorts explainer video, or make a 1-minute Facebook Story music video from a photo and a song, in the khmer-tts project. Use when the user asks to read, speak, voice, narrate or generate audio for Khmer text or a text file "using/with <voice>", to clone a voice from an mp3/wav, to add or list voices, to regenerate a bad line, to make a vertical/TikTok video (captions, overlays, sound effects) from a text, a narration, a news article URL (e.g. thmeythmey.com) or a step-by-step tutorial (with browser screenshots, code and terminal windows), or to combine a photo with a song (a YouTube link or audio file) into a Facebook/Instagram Story, lyric video or "video with this song" with lyrics, a sound visualizer and motion.
 ---
 
-# Khmer voice: generate audio, clone voices, make TikTok videos
+# Khmer voice: generate audio, clone voices, make TikTok videos and Facebook Stories
 
 Everything runs through the project CLI, from the project root:
 
@@ -15,6 +15,8 @@ $KT add-voice NAME SOURCE --start S --duration D --text "..." [--transcript FILE
 $KT speak --voice NAME "line" ["line" ...] [--out-dir DIR] [--prefix P] [--seed N]
 $KT read  --voice NAME FILE.txt [--out-dir DIR]
 $KT video videos/STORY.json [--narration DIR] [-o OUT.mp4] [--still SEC ...] [--seconds N]
+$KT song URL|FILE --out videos/audio/<song>          # Facebook Story: song.wav, vocals.wav, sung phrases
+$KT song videos/audio/<song> --align LYRICS.txt --from A --to B   # lyric timings for the story JSON
 ```
 
 Model loading takes ~10 s; generation runs at roughly 2 s of compute per 1 s of audio on the
@@ -238,6 +240,24 @@ the same storyboard works with any `read` output via `--narration`.
          empty box in a code line, add that character to `SYMBOLS`. Show the first command when the scene
          starts so the window is never empty for long.
        A `headline` can also take `media` (placed at `media_y`, default 720, filling the space down to the captions).
+       **Icons:** a `step` takes `stickers: [[file, line], ...]` (≤ 2): 120 px icon tiles centred on the first
+       window's top edge at its right end, popping in at their line. A `headline` takes `icons: [[file, line], ...]`
+       (a centred row at `icons_y`; don't combine with `media`, the row ends up behind the window), and `outro.icon`
+       replaces the check mark. Example: `videos/vercel_deploy.json`.
+
+   **Icons from IconScout** (the user asked for it): iconscout.com is behind Cloudflare (curl 403), so search
+   it in the user's Chrome (`iconscout.com/free-icons/<term>`; free filter is the default there) and take tile
+   ids from `a[href*="/free-icon/"]`. Read each icon page's "by …" and "Free to use under the … License" lines
+   (free icons need attribution). The PNGs themselves curl fine:
+   `https://cdn.iconscout.com/icon/free/png-512/<slug-from-page>-<id>.png`. Save into
+   `videos/images/<stem>/icons/` with a `CREDITS.md` (file, author, licence, page) and give the user the
+   caption credit line. Make white copies of black glyph icons for the dark background (alpha → white fill).
+   **Mask personal data** in every logged-in capture before rendering (the user asked): avatars, account/team
+   names, other project and repo names, deployment URLs, commit hashes/messages, site previews. Pixelate
+   (1/12 size) then blur each box in place and check the crops on a contact sheet.
+   For **logged-in steps** the user may OK using their Chrome to capture the real pages (`computer` screenshot
+   with `save_to_disk`; captures are 1470×779). Type example names into forms but never submit or click
+   Deploy/Create; check the current UI wording (Vercel's "Add New…" is now "Create New") and match the narration to it.
      Pick by content: two-sided comparison → `title` + `compare`; news/report → `headline` +
      `points` + `quote` for direct speech (see `videos/news.json`); step-by-step tutorial → `headline` with a
      screenshot + one `step` per step (see `videos/vercel_deploy.json`). `brands.a`/`b` colours tint the
@@ -294,6 +314,10 @@ Layout constants (card positions, caption height, colours, SFX levels) live at t
 `khmer_tts/video.py`. Change them there, not per video. The look: near-black background with a fading
 grid and two brand glows (`make_background`), macOS-style windows with drop shadows, no progress bar
 (the user asked for it to be removed; don't bring it back).
+Storyboard `background`: `aurora` (animated blue/purple glows; the user's pick for Vercel, use it by default),
+`spotlight`, `beams`, or the old `grid` (the user found it muddy and banded). All but `grid` are dithered so
+gradients don't band in H.264. Aurora mixes `brands.a` and `brands.b`, so give `b` a distinct hue of the brand's
+palette (Vercel: `#0070F3` + `#7928CA`).
 
 ### News style with article photos (`"style": "news"`)
 
@@ -330,3 +354,52 @@ Move/decode from `~/Downloads` into `videos/images/<stem>/`, delete the download
 Credit the source, author and photographer (if named) in `credits`. `អត្ថបទពាណិជ្ជកម្ម` (advertorial) is also
 a menu item on every Thmey Thmey page, so check for it near the article's title/tags, not in the whole page
 text; if the article really is one, set `disclosure` and tell the user.
+
+## D. Make a Facebook Story from a photo and a song (`"style": "story"`)
+
+A 1080×1920, 60 s music video for Facebook/Instagram Stories (renderer `khmer_tts/story_video.py`, example
+`videos/hometown_story.json`). It contains the following:
+- **Photo card:** a cream-bordered photo card that floats, tilts and pulses on the bass, with a label + date badge.
+- **Camera moves:** one move inside the photo per lyric line, joined by a short zoom-blur transition.
+- **Background:** a warm colour grade, and the photo blurred behind everything with a drifting sun flare and rising particles.
+- **Visualizer:** a 56-bar spectrum (green → gold) with a glow and a reflection, driven by the real audio.
+- **Title:** the song title and artist over the instrumental intro.
+- **Lyrics:** each half-line on its own row, with a gold karaoke fill that follows the singer.
+- **Ending:** a fade to black.
+All text is Google Sans (the user's rule, no Moul or other display fonts). There is no voice and no TTS in this kind of video.
+Safe areas: Facebook's profile bar covers the top ~250 px and the reply bar the bottom ~300 px.
+
+1. **Song.** `$KT song "<YouTube URL>" --out videos/audio/<song>` downloads `song.wav` and `description.txt`
+   (yt-dlp via `uvx`), separates `vocals.wav` with Demucs (~30 s) and prints the sung phrases. If YouTube
+   answers 429 (too many requests), wait a minute or use a file the user has: `$KT song FILE.mp3 --out …`.
+   Music rights: the user picks the song; tell them Facebook may mute a commercial recording in a Story, and
+   that its music sticker is the fallback. Never choose a song for them.
+2. **Lyrics.** Look in `description.txt` first (uploaders of Khmer songs often post the full lyrics with the
+   lyricist's name); otherwise ask the user to paste them. Never invent lyrics or put ASR guesses on screen.
+   Write `videos/audio/<song>/lyrics.txt` with one sung line per row and the halves of a Khmer couplet split
+   by ` / ` (`ដេកដើរស្រមៃឱ / ដល់ថ្ងៃចៃដន្យអឺយ`); a refrain like `ជើណាកែវណានាងណា` stays one part.
+3. **Pick the minute.** From the phrase list, start ~10 s before the singing (an intro for the title) and
+   end at the end of a verse or a line, at a gap in the phrases. Verses of the same song repeat the same
+   phrase pattern, so the gaps tell you the verse length (e.g. 19.0 → 57.6 s, 38.6 s per verse).
+4. **Align.** `$KT song videos/audio/<song> --align videos/audio/<song>/lyrics.txt --from A --to B` with A/B
+   about 1 s around the sung lines in the clip. It force-aligns the romanized lyrics (torchaudio MMS_FA + uroman,
+   ~5 s; MMS model ~1.2 GB on first use) and prints the `lyrics` entries (`{"t": [start, half-2 start, end],
+   "text": [...]}`, song seconds). Each line lasts until just before the next one and stops where the singing does,
+   because the aligner times held notes short. Matched hand-tuned times within ~0.3 s on Champa Banteay Dek.
+   If the user says a line is early or late, nudge its numbers.
+5. **Storyboard** `videos/<stem>.json`: `style: "story"`, `output`, `song`, `start`, `seconds` (60),
+   `title`, `artist`, `badge` (e.g. `វិស្សមកាលនៅស្រុកកំណើត`), `date`, `photo` (copy into `videos/images/<stem>/`),
+   `grade` (`warm` or `none`), `lyrics`, and `shots`: the intro, then one per lyric line, each
+   `{"from": [x, y, zoom], "to": [x, y, zoom]}` in the photo's pixels (zoom 1 = the largest card-shaped crop;
+   a shot can take its own `"photo"`, so several holiday photos can alternate by line). Without `shots` you
+   get gentle automatic push-ins. Plan shots like an editor: wide intro, then details tied to the words
+   (the coconuts on one line, leaves and sky on another), and pull back out for the refrain. **Keep
+   distractions out of frame** (e.g. a bright snack wrapper at the photo's edge): use zoom ≥ ~1.6 and centre
+   away from it; the blurred background is taken around the first shot too. On a ~720 px wide photo keep
+   zoom ≤ ~2.1, past that the close-ups go soft.
+6. **Preview, render, verify:** `$KT video videos/<stem>.json --still 4 21 26 36 45 59` (one per shot, plus
+   one at a line change, to check that lyric rows don't overlap) → contact sheet → Read it. Check the title,
+   that the shots avoid what they should, and the Khmer stacks. Then render with `$KT video videos/<stem>.json`
+   (~40 s on an M-series Mac) and check loudness (about -14 LUFS).
+7. **Report:** the path, the song window, the lyrics source, the line timings, each shot, the Facebook music
+   note, and that the user should watch it before posting.

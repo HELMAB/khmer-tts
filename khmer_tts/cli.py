@@ -9,6 +9,8 @@
     vits   "text"                            baseline single-voice VITS model
     video  videos/STORYBOARD.json            vertical explainer video from a narrated article
     make   texts/article.txt --voice NAME    all of it: prepare, narrate, storyboard, video
+    song   URL|FILE --out DIR                song for a Facebook Story: download, vocals, sung phrases
+    song   DIR --align LYRICS.txt --from A --to B   lyric line timings for the story storyboard
 """
 from __future__ import annotations
 
@@ -154,6 +156,40 @@ def cmd_make(args) -> None:
         print("English:    " + ", ".join(r["english"]) + " (kept as written; check how they sound)")
 
 
+def cmd_song(args) -> None:
+    import json
+    import shutil
+    import subprocess
+
+    from .song import align_lyrics, fetch_song, separate_vocals, vocal_phrases
+
+    if args.align:
+        folder = Path(args.source)
+        lines = [[p.strip() for p in ln.split("/")] for ln in Path(args.align).read_text(encoding="utf-8").splitlines()
+                 if ln.strip() and not ln.lstrip().startswith("#")]
+        times = align_lyrics(folder / "vocals.wav", lines, args.t_from, args.t_to)
+        print(",\n".join(json.dumps({"t": t, "text": parts}, ensure_ascii=False) for t, parts in zip(times, lines)))
+        return
+    if not args.out:
+        raise SystemExit("song: pass --out videos/audio/<song> (or --align LYRICS.txt to time lyrics)")
+    out = Path(args.out)
+    if args.source.startswith(("http://", "https://")):
+        song, desc = fetch_song(args.source, out)
+        print(f"Song: {song}\nDescription (look for lyrics): {desc}")
+    else:
+        out.mkdir(parents=True, exist_ok=True)
+        song = out / "song.wav"
+        if args.source.endswith(".wav"):
+            shutil.copy(args.source, song)
+        else:
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", args.source, str(song)], check=True)
+    vocals = separate_vocals(song)
+    print(f"Vocals: {vocals}\nSung phrases (song seconds):")
+    for a, b in vocal_phrases(vocals):
+        if b - a >= 1.0:
+            print(f"  {a:7.2f} - {b:7.2f}  ({b - a:4.1f}s)")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="khmer_tts", description="Khmer TTS with voice cloning")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -218,6 +254,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--narration", help="use another `read` output folder instead of the storyboard's (e.g. another voice)")
     p.add_argument("--workers", type=int, help="render processes (default: by CPU count and free memory)")
     p.set_defaults(func=cmd_video)
+
+    p = sub.add_parser("song", help="prepare a song for a Facebook Story video (style: story)")
+    p.add_argument("source", help="song URL (YouTube…) or audio file; with --align: the song folder")
+    p.add_argument("--out", help="song folder, e.g. videos/audio/<stem> (required without --align)")
+    p.add_argument("--align", metavar="LYRICS.txt", help="one lyric line per row, halves split by ' / '")
+    p.add_argument("--from", dest="t_from", type=float, help="align window start (song seconds)")
+    p.add_argument("--to", dest="t_to", type=float, help="align window end (song seconds)")
+    p.set_defaults(func=cmd_song)
 
     p = sub.add_parser("make", help="text → narration → storyboard → video, in one command")
     p.add_argument("source", help="raw text file (article, script)")

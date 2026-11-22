@@ -8,3 +8,4 @@ soundfile
 numpy
 pillow
 khmer-nltk  # Khmer word segmentation (line breaks, ៗ)
+uroman  # romanizes lyrics for forced alignment (Facebook Story videos)
