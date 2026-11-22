@@ -375,7 +375,20 @@ Safe areas: Facebook's profile bar covers the top ~250 px and the reply bar the 
    Music rights: the user picks the song; tell them Facebook may mute a commercial recording in a Story, and
    that its music sticker is the fallback. Never choose a song for them.
 2. **Lyrics.** Look in `description.txt` first (uploaders of Khmer songs often post the full lyrics with the
-   lyricist's name); otherwise ask the user to paste them. Never invent lyrics or put ASR guesses on screen.
+   lyricist's name); otherwise ask the user to paste them. Never invent lyrics or put ASR guesses on screen:
+   `seanghay/whisper-medium-khmer` (cached) on the separated vocals gave gibberish for a Yin Sarin song
+   (ornamented singing), only fragments like "មិនដូច" survived. **Next, read them off a karaoke video**
+   (the user wants the real words, not substitutes): search `uvx yt-dlp --flat-playlist --print "%(id)s | %(title)s"
+   "ytsearch25:<title>"` for `ភ្លេងសម្រាប់ច្រៀង` / karaoke / cover uploads (other uploads' descriptions give the
+   lyricist), download one at ≤480p, take a frame every 4 s cropped to the lyric area, stack them 6 per image
+   with timestamps and Read them; zoom 3-4× on any doubtful word (ខក vs ឯក, ឡកឡឺយ). Karaoke screens don't show
+   the sung order or repeats: take those from the recording, using the ASR fragments as anchors (they line up
+   phrase by phrase even when unreadable). Then `--align`, and snap each line start to its sung phrase where the
+   aligner drifts (it was 1.4-2.6 s late on later lines of a 1 min window). Keep a karaoke typo as shown
+   (`ក្លែម`) and tell the user. Example: `videos/hometown_story.json` (កន្សោមអក).
+   Only if no source has the words and the user asks you to decide, write short original Khmer **captions**
+   instead, one per sung phrase, with `"lyrics_style": "caption"` (lines appear whole, no karaoke sweep, so they
+   don't pass as the song's words) and `lyrics_source` saying so; tell the user plainly they are not the lyrics.
    Write `videos/audio/<song>/lyrics.txt` with one sung line per row and the halves of a Khmer couplet split
    by ` / ` (`ដេកដើរស្រមៃឱ / ដល់ថ្ងៃចៃដន្យអឺយ`); a refrain like `ជើណាកែវណានាងណា` stays one part.
 3. **Pick the minute.** From the phrase list, start ~10 s before the singing (an intro for the title) and
