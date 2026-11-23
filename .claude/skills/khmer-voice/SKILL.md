@@ -364,7 +364,9 @@ A 1080×1920, 60 s music video for Facebook/Instagram Stories (renderer `khmer_t
 - **Background:** a warm colour grade, and the photo blurred behind everything with a drifting sun flare and rising particles.
 - **Visualizer:** a 56-bar spectrum (green → gold) with a glow and a reflection, driven by the real audio.
 - **Title:** the song title and artist over the instrumental intro.
-- **Lyrics:** each half-line on its own row, with a gold karaoke fill that follows the singer.
+- **Lyrics:** shown line by line (each half-line on its own row), whole, in one soft colour, fading in as the
+  line is sung. **No karaoke fill and no caption style** (the user dislikes both); `"lyrics_style": "karaoke"`
+  still exists but use it only if asked.
 - **Ending:** a fade to black.
 All text is Google Sans (the user's rule, no Moul or other display fonts). There is no voice and no TTS in this kind of video.
 Safe areas: Facebook's profile bar covers the top ~250 px and the reply bar the bottom ~300 px.
@@ -392,7 +394,11 @@ Safe areas: Facebook's profile bar covers the top ~250 px and the reply bar the 
    Write `videos/audio/<song>/lyrics.txt` with one sung line per row and the halves of a Khmer couplet split
    by ` / ` (`ដេកដើរស្រមៃឱ / ដល់ថ្ងៃចៃដន្យអឺយ`); a refrain like `ជើណាកែវណានាងណា` stays one part.
 3. **Pick the minute.** From the phrase list, start ~10 s before the singing (an intro for the title) and
-   end at the end of a verse or a line, at a gap in the phrases. Verses of the same song repeat the same
+   end at the end of a verse or a line, at a gap in the phrases. For a modern song whose hook is the chorus
+   (find it as the phrase pattern that repeats later, e.g. 83.6 s and again 191.8 s), take the whole chorus
+   instead, starting just before it, with `"title_at": "end"` (title + artist after the last lyric, over the
+   outro) and `"fade_out": 1.5` so the title stays readable. Long titles shrink to one line automatically
+   (96 → 60 px); add a space at the natural break in the display title in case it still wraps. Verses of the same song repeat the same
    phrase pattern, so the gaps tell you the verse length (e.g. 19.0 → 57.6 s, 38.6 s per verse).
 4. **Align.** `$KT song videos/audio/<song> --align videos/audio/<song>/lyrics.txt --from A --to B` with A/B
    about 1 s around the sung lines in the clip. It force-aligns the romanized lyrics (torchaudio MMS_FA + uroman,
@@ -400,9 +406,19 @@ Safe areas: Facebook's profile bar covers the top ~250 px and the reply bar the 
    "text": [...]}`, song seconds). Each line lasts until just before the next one and stops where the singing does,
    because the aligner times held notes short. Matched hand-tuned times within ~0.3 s on Champa Banteay Dek.
    If the user says a line is early or late, nudge its numbers.
-5. **Storyboard** `videos/<stem>.json`: `style: "story"`, `output`, `song`, `start`, `seconds` (60),
+5. **Mood: the style must follow what the song means** (the user asked: a sad song gets a sad-looking video).
+   Read the lyrics, not the tempo, and set `"mood"`:
+   - `warm` (default): happy, homecoming, love, celebration. Golden grade, sun flare, rising sparkles, cream
+     lyrics, lively float and tilt, bounce on the beat, zoom-blur cuts. Example: `videos/hometown_story.json`.
+   - `sad`: heartbreak, exhaustion, loneliness, regret (e.g. ខួរក្បាលខ្ញុំស្មុគស្មាញខ្លាំងណាស់: "no strength to go
+     on", "how do I keep living"). Cool, faded blue-grey grade, dark background and vignette, a few faint
+     drifting dust specks (**no rain**: the user disliked it), silver-blue visualizer, soft-white lyrics, slow,
+     calm motion with no beat bounce, and slow dissolves between shots. Example: `videos/khmer_house_story.json`.
+   Plan the shots for the mood as well: a sad song gets slow pans and lingering details (an empty path, an old
+   tree, an old cart wheel), tied to the words. Tell the user which mood you picked and why.
+6. **Storyboard** `videos/<stem>.json`: `style: "story"`, `output`, `song`, `start`, `seconds` (60),
    `title`, `artist`, `badge` (e.g. `វិស្សមកាលនៅស្រុកកំណើត`), `date`, `photo` (copy into `videos/images/<stem>/`),
-   `grade` (`warm` or `none`), `lyrics`, and `shots`: the intro, then one per lyric line, each
+   `mood`, `grade` (only to override the mood's: `warm`, `cool` or `none`), `lyrics`, and `shots`: the intro, then one per lyric line, each
    `{"from": [x, y, zoom], "to": [x, y, zoom]}` in the photo's pixels (zoom 1 = the largest card-shaped crop;
    a shot can take its own `"photo"`, so several holiday photos can alternate by line). Without `shots` you
    get gentle automatic push-ins. Plan shots like an editor: wide intro, then details tied to the words
@@ -410,9 +426,15 @@ Safe areas: Facebook's profile bar covers the top ~250 px and the reply bar the 
    distractions out of frame** (e.g. a bright snack wrapper at the photo's edge): use zoom ≥ ~1.6 and centre
    away from it; the blurred background is taken around the first shot too. On a ~720 px wide photo keep
    zoom ≤ ~2.1, past that the close-ups go soft.
-6. **Preview, render, verify:** `$KT video videos/<stem>.json --still 4 21 26 36 45 59` (one per shot, plus
+   **A multi-panel image** (e.g. an AI storyboard with captioned scenes, `videos/phlieng_jivit_story.json`): map
+   the lyric lines to the panels in story order, open on the whole image, close on a pull-back. Frame each panel
+   tightly (zoom ~3.6-5.6 on a 1536 px wide image: crop height ≤ the panel's) so neighbours and **printed
+   labels (often English) stay out of frame**; check the frame edges in stills and nudge `y` by 10-25 px.
+   Painterly art tolerates the ~2× upscale. If the clip is singing from start to end (no gap for a title), set
+   `"title_at": "none"` and put the song and artist in `badge` / `date` so the credit stays on the card.
+7. **Preview, render, verify:** `$KT video videos/<stem>.json --still 4 21 26 36 45 59` (one per shot, plus
    one at a line change, to check that lyric rows don't overlap) → contact sheet → Read it. Check the title,
    that the shots avoid what they should, and the Khmer stacks. Then render with `$KT video videos/<stem>.json`
    (~40 s on an M-series Mac) and check loudness (about -14 LUFS).
-7. **Report:** the path, the song window, the lyrics source, the line timings, each shot, the Facebook music
+8. **Report:** the path, the song window, the mood, the lyrics source, the line timings, each shot, the Facebook music
    note, and that the user should watch it before posting.
