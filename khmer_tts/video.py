@@ -202,6 +202,7 @@ class Element:
     t_in: float
     dy: int = 40          # slide distance
     scale_in: bool = False
+    anim: object = None   # optional t -> image of the same size (e.g. a page scrolling inside a window)
 
 
 @dataclass
@@ -496,6 +497,35 @@ def browser_window(shot: Image.Image, crop, w: int, url: str) -> tuple[Image.Ima
     return img, s
 
 
+SCROLL_S = 1.1  # seconds for one glide
+
+
+def scrolling(shot: Image.Image, crop, win: Image.Image, s: float, stops: list):
+    """t -> the window (with shadow) showing the page scrolled through `stops` [(crop y, time), ...]."""
+    cx, cy, cw, ch = crop
+    y_min, y_max = min([cy] + [y for y, _ in stops]), max([cy] + [y for y, _ in stops])
+    body_w, body_h = win.width - 4, win.height - BAR_H - 2
+    strip = shot.crop((cx, y_min, cx + cw, y_max + ch)).convert("RGB")
+    strip = strip.resize((body_w, max(body_h, round(strip.height * body_w / cw))), Image.LANCZOS)
+    k = (strip.height - body_h) / max(1, y_max - y_min)
+    mask = Image.new("L", (body_w, body_h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, -WIN_R, body_w - 1, body_h - 1), radius=WIN_R - 2, fill=255)
+    base = shadow(win)
+
+    def frame(t: float) -> Image.Image:
+        y = cy
+        for target, t_go in stops:
+            if t >= t_go:
+                p = min(1.0, (t - t_go) / SCROLL_S)
+                y += (target - y) * (p * p * (3 - 2 * p))
+        top = min(strip.height - body_h, max(0, round((y - y_min) * k)))
+        img = base.copy()
+        img.paste(strip.crop((0, top, body_w, top + body_h)), (SHADOW + 2, SHADOW + BAR_H), mask)
+        return img
+
+    return frame
+
+
 def code_line(text: str, size: int) -> Image.Image:
     f = mono(size)
     img = Image.new("RGBA", (int(f.getlength(text)) + 4, int(size * 1.6)), (0, 0, 0, 0))
@@ -537,7 +567,10 @@ def build_media(media: dict, top: int, max_h: int, at, sfx: list, root: Path) ->
         if BAR_H + crop[3] * CONTENT_W / crop[2] > max_h:  # too tall for the slot: trim the bottom
             crop = (crop[0], crop[1], crop[2], int((max_h - BAR_H) * crop[2] / CONTENT_W))
         win, s = browser_window(shot, crop, CONTENT_W, media["url"])
-        els.append(Element(shadow(win), MARGIN - SHADOW, top - SHADOW, t, dy=50))
+        # scroll: [[crop y, line], ...], the page glides to each y as its line is spoken
+        stops = [(min(y, shot.height - crop[3]), at(line)) for y, line in media.get("scroll", [])]
+        anim = scrolling(shot, crop, win, s, stops) if stops else None
+        els.append(Element(shadow(win), MARGIN - SHADOW, top - SHADOW, t, dy=50, anim=anim))
         if fx := media.get("focus"):
             ring = focus_ring(int(fx[2] * s), int(fx[3] * s))
             fl = at(media.get("focus_line", media["line"])) + 0.35
@@ -784,7 +817,8 @@ class Aurora:
 def background(sb: dict):
     """Storyboard "background": grid (default), spotlight, beams (static, drifting) or aurora (animated).
     Returns a large still to crop from, or a callable t -> frame-sized image."""
-    a, b = hex_rgb(sb["brands"]["a"]["color"]), hex_rgb(sb["brands"]["b"]["color"])
+    # "glow": [hex, hex] sets the backdrop colours when the brand colours would mix to mud (e.g. red + green)
+    a, b = map(hex_rgb, sb.get("glow", (sb["brands"]["a"]["color"], sb["brands"]["b"]["color"])))
     style = sb.get("background", "grid")
     makers = {"grid": make_background, "spotlight": make_spotlight, "beams": make_beams, "aurora": Aurora}
     if style not in makers:
@@ -813,7 +847,7 @@ def paste(frame: Image.Image, el: Element, t: float, scene_alpha: float) -> None
     if t < el.t_in:
         return
     p = min(1.0, (t - el.t_in) / ANIM)
-    img, x, y = el.img, el.x, el.y + int(el.dy * (1 - ease_out(p)))
+    img, x, y = el.anim(t) if el.anim else el.img, el.x, el.y + int(el.dy * (1 - ease_out(p)))
     if el.scale_in and p < 1:
         s = max(0.05, back_out(p) * 0.4 + 0.6)
         img = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.BILINEAR)
