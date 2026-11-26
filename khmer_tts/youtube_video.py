@@ -12,6 +12,10 @@ Storyboard ("style": "youtube"; example videos/dog_barking_youtube.json):
     layout     "points" (default: kicker, title, numbered points, bottom captions, full-width visualizer),
                "paragraph" (the narration as running pages in the left column, unread lines gray, small visualizer) or
                "minimal" (left side empty, slim visualizer under the brand mark, one-line caption at the bottom)
+    panel      "right" (default: image panel on the right, dissolving into a smoky left side) or "full" (the
+               camera shot fills the whole frame, no dark side; the user's mark-up of the 3646 cut)
+    brand      "minimal" only: "top" (default: brand mark + visualizer top-left) or "bottom" (both centred just
+               above the caption, the user's mark-up of the 3646 cut)
     scenes     {"type": "headline" | "quote", "line", ... as in the explainer, plus
                 "shot": {"image": key, "from": [x, y, zoom], "to": [x, y, zoom]}   (cover crop, image pixels)
                     or  {"image": key, "card": true}                               (whole image as a card)}
@@ -55,6 +59,8 @@ BOX_VIS = (COL_X, 778, 690, 92)  # x, y, w, h of the small visualizer box
 # "layout": "minimal" — the left side left empty (just the smoky backdrop), the visualizer in a slim box under the
 # brand mark, and the one-line caption centred at the bottom (the user's third mark-up)
 TOP_VIS = (COL_X, 150, 0, 60)  # width 0: as wide as the brand mark above it
+# "brand": "bottom" — the same brand mark and visualizer, centred over the bottom scrim just above the caption
+BOTTOM_LOCKUP_Y, BOTTOM_VIS_Y = 760, 840
 BOX_BARS = 46
 MUTED = (175, 178, 188)
 LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11"
@@ -91,11 +97,12 @@ def smoky(img: Image.Image) -> Image.Image:
 class Shot:
     """t -> the right-hand panel image (PANEL_W x H) for one scene."""
 
-    def __init__(self, spec: dict, img: Image.Image, t0: float, t1: float):
+    def __init__(self, spec: dict, img: Image.Image, t0: float, t1: float, px: int = PANEL_X):
         self.t0, self.t1, self.card = t0, t1, spec.get("card", False)
+        self.px, self.pw = px, W - px  # px = 0: the shot fills the frame ("panel": "full")
         src = img.convert("RGB")
         if self.card:  # whole image as a card on a blurred panel, slowly breathing in
-            self.back = smoky(src).crop((PANEL_X, 0, W, H))
+            self.back = smoky(src).crop((px, 0, W, H))
             ch = 760  # clear of the caption line
             cw = round(src.width * ch / src.height)
             card = src.resize((cw, ch), Image.LANCZOS).convert("RGBA")
@@ -105,7 +112,7 @@ class Shot:
             sh.alpha_composite(card, (60, 60))
             self.cardimg = sh
             return
-        self.aspect = PANEL_W / H
+        self.aspect = self.pw / H
         # pre-upscale so the closest zoom still has ~H source pixels of height
         k = max(1.0, H * MAX_ZOOM / src.height)
         self.src = src.resize((round(src.width * k), round(src.height * k)), Image.LANCZOS)
@@ -130,10 +137,10 @@ class Shot:
             p = ease((t - self.t0) / max(1e-3, self.t1 - self.t0 + XFADE))
             s = 1.0 + 0.035 * p
             c = self.cardimg.resize((round(self.cardimg.width * s), round(self.cardimg.height * s)), Image.BILINEAR)
-            out.alpha_composite(c, ((PANEL_W - c.width) // 2 + 60, (H - c.height) // 2 - 70))
+            out.alpha_composite(c, ((self.pw - c.width) // 2 + (60 if self.px else 0), (H - c.height) // 2 - 70))
             return out
         x0, y0, vw, vh = self.view(t)
-        return self.src.resize((PANEL_W, H), Image.BILINEAR, box=(x0, y0, x0 + vw, y0 + vh)).convert("RGBA")
+        return self.src.resize((self.pw, H), Image.BILINEAR, box=(x0, y0, x0 + vw, y0 + vh)).convert("RGBA")
 
 
 # ---------------------------------------------------------------- text column
@@ -393,7 +400,10 @@ def scene_frame(i: int, t: float) -> Image.Image:
     sc = st["scenes"][i]
     frame = st["backs"][sc["image"]].copy()
     panel = sc["shot"](t)
-    frame.paste(panel.convert("RGB"), (PANEL_X, 0), st["mask"])
+    if sc["shot"].px:
+        frame.paste(panel.convert("RGB"), (PANEL_X, 0), st["mask"])
+    else:  # "panel": "full"
+        frame.paste(panel.convert("RGB"), (0, 0))
     frame.alpha_composite(st["scrim"])
     for img, x, y, t_in in sc["els"]:
         if t < t_in:
@@ -413,7 +423,9 @@ def render_frame(n: int) -> bytes:
     if nxt < len(scenes) and t > scenes[nxt]["t0"] - XFADE:  # cross-fade into the next scene
         a = ease((t - (scenes[nxt]["t0"] - XFADE)) / XFADE)
         frame = Image.blend(frame, scene_frame(nxt, max(t, scenes[nxt]["t0"])), a)
-    frame.alpha_composite(st["lockup"], (COL_X, 70))
+    bottom = st["layout"] == "minimal" and st["brand"] == "bottom"
+    lk_x = W // 2 - st["lockup"].width // 2 if bottom else COL_X
+    frame.alpha_composite(st["lockup"], (lk_x, BOTTOM_LOCKUP_Y if bottom else 70))
     if st["layout"] == "paragraph":
         for pi, pg in enumerate(st["pages"]):
             if pg["t0"] - 0.01 <= t < pg["t1"]:
@@ -434,6 +446,8 @@ def render_frame(n: int) -> bytes:
                 break
     if st["layout"] == "minimal":
         x, y, w, h = TOP_VIS
+        if bottom:
+            x, y = lk_x, BOTTOM_VIS_Y
         draw_box_visualizer(frame, st["levels"][min(n, len(st["levels"]) - 1)], st["accent"],
                             (x, y, w or st["lockup"].width, h))
     elif st["layout"] == "points":
@@ -468,9 +482,13 @@ def prepare(sb: dict, root: Path, seconds: float | None = None) -> tuple[Path, i
         key = s["shot"]["image"]
         els = column(s, at, accent, ink) if layout == "points" else []
         scenes.append({"t0": starts[k] if k else 0.0, "image": key, "els": els,
-                       "shot": Shot(s["shot"], images[key], starts[k], starts[k + 1])})
-    ramp = np.clip((np.arange(H, dtype=np.float32) - (900 if layout == "paragraph" else 820)) / 260, 0, 1) ** 1.4 \
-        * (120 if layout == "paragraph" else 215)
+                       "shot": Shot(s["shot"], images[key], starts[k], starts[k + 1],
+                                    0 if sb.get("panel") == "full" else PANEL_X)})
+    if sb.get("panel") == "full":  # no dark side: a taller, deeper fade carries the brand mark and the caption
+        ramp = np.clip((np.arange(H, dtype=np.float32) - 560) / 420, 0, 1) ** 1.2 * 235
+    else:
+        ramp = np.clip((np.arange(H, dtype=np.float32) - (900 if layout == "paragraph" else 820)) / 260, 0, 1) ** 1.4 \
+            * (120 if layout == "paragraph" else 215)
     scrim = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     scrim.putalpha(Image.fromarray(np.repeat(ramp[:, None], W, 1).astype(np.uint8), "L"))
     pages = []
@@ -483,7 +501,7 @@ def prepare(sb: dict, root: Path, seconds: float | None = None) -> tuple[Path, i
                     for i, (c, (s, _)) in enumerate(zip(sb["captions"], spans))]
     _ST.update(scenes=scenes, backs={k: smoky(v) for k, v in images.items()}, mask=panel_mask(), scrim=scrim,
                lockup=lockup(sb["lockup"], accent), captions=captions, burn=sb.get("burn_captions", True), layout=layout,
-               pages=pages,
+               brand=sb.get("brand", "top"), pages=pages,
                accent=accent, total=total)
     return total, spans, narration_end
 
