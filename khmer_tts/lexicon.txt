@@ -1,0 +1,50 @@
+# How English words are SAID by the Khmer model: <English word or phrase> TAB <Khmer phonetic spelling>
+# Only the synthesizer sees the right-hand side; TTS files and captions keep the English spelling.
+# Matching ignores case and whole words only; longer phrases win over single words.
+# Edit a spelling here and re-run `read` (only lines containing that word are regenerated).
+GitHub	ហ្គីតហាប់
+Git	ហ្គីត
+repository	រីផូស៊ីតូរី
+commit	ខមមីត
+branch	ប្រេនឆ៍
+video	វីដេអូ
+TikTok	ធីកតុក
+caption	ខេបសិន
+install	អ៊ីនស្តល
+ztudio	ស្ទូឌីយោ
+editor	អេឌីទ័រ
+browser	ប្រោវស៊ឺ
+file	ហ្វាល
+SRT	អេស អា ធី
+account	អាខោន
+font	ហ្វុន
+upload	អាប់ឡូត
+export	អិចផត
+Full HD	ហ្វុល អេច ឌី
+MP4	អិម ភី ហ្វ័រ
+effect	អ៊ីហ្វិច
+timeline	ថាមឡាញ
+keyframe	ឃីហ្វ្រេម
+animation	អេនីមេសិន
+overlay	អូវើឡេ
+background music	បែកក្រោន មីយូស៊ីក
+background	បែកក្រោន
+music	មីយូស៊ីក
+server	ស៊ើវើ
+open source	អូផិន សស
+netlify	ណេតលីហ្វាយ
+dot	ដត
+app	អែប
+Star	ស្តា
+Dobpi	ដុបពី
+website	វេបសាយ
+search	ស៊ើច
+zoom	ហ្ស៊ូម
+fullscreen	ហ្វុលស្គ្រីន
+download	ដោនឡូត
+print	ព្រីន
+dark mode	ដាក មូត
+internet	អ៊ីនធឺណិត
+MB	មេហ្គាបៃ
+Android	អេនដ្រយ
+APK	អេ ភី ខេ

@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 
+from .lexicon import speakable, unknown_words
 from .synth import Result, VoxPocket
 from .voices import Voice
 
@@ -45,8 +46,11 @@ def previous_parts(out_dir: Path, voice: Voice) -> dict[str, np.ndarray]:
     info = json.loads(meta.read_text(encoding="utf-8"))
     if info.get("voice") != voice.name or info.get("reference") != voice.text:
         return {}
+    # Keyed by what the model was given, so a lexicon change regenerates the lines it affects.
+    # (Older runs have no "spoken" list; their Latin lines were read as written.)
+    spoken = info.get("spoken", info["lines"])
     found = {}
-    for i, line in enumerate(info["lines"], 1):
+    for i, line in enumerate(spoken, 1):
         wav = out_dir / "parts" / f"{i:02d}.wav"
         if wav.exists() and line not in found:
             found[line] = sf.read(wav, dtype="float32")[0]
@@ -82,8 +86,10 @@ def read_article(
 
     pieces, flagged, taken, reused, sr = [], [], 0.0, 0, None
     for i, line in enumerate(lines, 1):
-        if line in old:
-            audio, reused = old[line], reused + 1
+        for word in unknown_words(line):
+            print(f"      no pronunciation for {word!r}: add it to khmer_tts/lexicon.txt", flush=True)
+        if speakable(line) in old:
+            audio, reused = old[speakable(line)], reused + 1
             sr = sr or sf.info(next(parts_dir.glob("*.wav"))).samplerate
             print(f"[{i:2d}/{len(lines)}] reused  {line[:40]}…", flush=True)
         else:
@@ -113,6 +119,8 @@ def read_article(
     output = out_dir / "article.wav"
     audio = np.concatenate(pieces)
     sf.write(output, audio, sr)
-    (out_dir / "lines.json").write_text(json.dumps({"voice": voice.name, "reference": voice.text, "lines": lines},
+    (out_dir / "lines.json").write_text(json.dumps({"voice": voice.name, "reference": voice.text, "lines": lines,
+                                                    "spoken": [speakable(ln) for ln in lines],
+                                                    "pauses": [short_pause, long_pause]},
                                                    ensure_ascii=False, indent=1), encoding="utf-8")
     return ArticleReport(output, len(audio) / sr, taken, flagged, reused)

@@ -13,6 +13,7 @@ import numpy as np
 import soundfile as sf
 import torch
 
+from .lexicon import speakable
 from .voices import Voice
 
 VOXPOCKET_REPO = "muyleanging/VoxPocket-TTS-Khmer"
@@ -57,7 +58,7 @@ class VoxPocket:
         torch.manual_seed(seed)
         t0 = time.time()
         audio = self.model.generate(
-            text=text,
+            text=speakable(text),  # English words → Khmer phonetic spelling (lexicon.txt)
             prompt_wav_path=str(voice.wav),
             prompt_text=voice.text,
             cfg_value=self.cfg,
