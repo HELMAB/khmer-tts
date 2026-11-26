@@ -14,6 +14,9 @@ Storyboard ("style": "youtube"; example videos/dog_barking_youtube.json):
                "minimal" (left side empty, slim visualizer under the brand mark, one-line caption at the bottom)
     panel      "right" (default: image panel on the right, dissolving into a smoky left side) or "full" (the
                camera shot fills the whole frame, no dark side; the user's mark-up of the 3646 cut)
+    aspect     "landscape" (default, 1920x1080) or "vertical" (1080x1920 TikTok cut; needs "panel": "full"): brand
+               mark, visualizer and captions sit inside TikTok's safe area (above its caption block, left of its
+               button rail); shots are framed in the image's pixels as usual, the view just turns 9:16
     brand      "minimal" only: "top" (default: brand mark + visualizer top-left) or "bottom" (both centred just
                above the caption, the user's mark-up of the 3646 cut)
     scenes     {"type": "headline" | "quote", "line", ... as in the explainer, plus
@@ -61,6 +64,11 @@ BOX_VIS = (COL_X, 778, 690, 92)  # x, y, w, h of the small visualizer box
 TOP_VIS = (COL_X, 150, 0, 60)  # width 0: as wide as the brand mark above it
 # "brand": "bottom" — the same brand mark and visualizer, centred over the bottom scrim just above the caption
 BOTTOM_LOCKUP_Y, BOTTOM_VIS_Y = 760, 840
+CAP_W = 1500                      # caption wrap width
+# "aspect": "vertical" (TikTok): its caption block covers y > ~1620 and its button rail x > ~905 (y 900-1610), so
+# the brand mark, visualizer and a narrower caption stack up between y ~1230 and ~1560, centred
+LANDSCAPE = dict(W=1920, H=1080, CAPTION_CY=975, BOTTOM_LOCKUP_Y=760, BOTTOM_VIS_Y=840, CAP_W=1500)
+VERTICAL = dict(W=1080, H=1920, CAPTION_CY=1475, BOTTOM_LOCKUP_Y=1230, BOTTOM_VIS_Y=1310, CAP_W=760)
 BOX_BARS = 46
 MUTED = (175, 178, 188)
 LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11"
@@ -321,7 +329,7 @@ def column(scene: dict, at, accent, ink) -> list[tuple[Image.Image, int, int, fl
 
 
 def caption_image(text: str, accent) -> Image.Image:
-    t = text_image(text, 46, "Bold", TEXT, max_w=1500, highlight=accent, line_gap=1.4)
+    t = text_image(text, 46, "Bold", TEXT, max_w=CAP_W, highlight=accent, line_gap=1.4)
     pad = 20
     out = Image.new("RGBA", (t.width + 2 * pad, t.height + 2 * pad), (0, 0, 0, 0))
     sh = Image.new("RGBA", t.size, (0, 0, 0, 0))
@@ -464,6 +472,10 @@ def srt_time(s: float) -> str:
 
 
 def prepare(sb: dict, root: Path, seconds: float | None = None) -> tuple[Path, int]:
+    vertical = sb.get("aspect") == "vertical"
+    if vertical and sb.get("panel") != "full":
+        raise SystemExit('"aspect": "vertical" needs "panel": "full"')
+    globals().update(VERTICAL if vertical else LANDSCAPE)  # workers are forked after this, so they see it
     spans, narration_end = line_timings(sb, root)
     at = lambda line: spans[line - 1][0]  # noqa: E731
     accent = hex_rgb(sb.get("accent", "#D4A72C"))
@@ -485,7 +497,8 @@ def prepare(sb: dict, root: Path, seconds: float | None = None) -> tuple[Path, i
                        "shot": Shot(s["shot"], images[key], starts[k], starts[k + 1],
                                     0 if sb.get("panel") == "full" else PANEL_X)})
     if sb.get("panel") == "full":  # no dark side: a taller, deeper fade carries the brand mark and the caption
-        ramp = np.clip((np.arange(H, dtype=np.float32) - 560) / 420, 0, 1) ** 1.2 * 235
+        top, span = (1000, 520) if vertical else (560, 420)
+        ramp = np.clip((np.arange(H, dtype=np.float32) - top) / span, 0, 1) ** 1.2 * 235
     else:
         ramp = np.clip((np.arange(H, dtype=np.float32) - (900 if layout == "paragraph" else 820)) / 260, 0, 1) ** 1.4 \
             * (120 if layout == "paragraph" else 215)
