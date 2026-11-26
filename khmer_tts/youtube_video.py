@@ -542,8 +542,9 @@ def render_still(storyboard_path: Path, t: float, out: Path, narration: str | No
 
 def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None) -> Path:
     """Storyboard "thumbnail": {image, view: [x0, y0, height] (image px; width follows 16:9), lines: [[text, size,
-    "accent"|"white"], ...], badge}. The image fills the frame, a dark fade on the left carries a big bold title,
-    the brand mark sits top-left and an optional badge pill sits under the title."""
+    "accent"|"white"], ...], badge, place}. The image fills the frame, a dark fade on the left carries a big bold
+    title, the brand mark sits top-left and an optional badge pill sits under the title. "place": "bottom" puts the
+    title along the bottom over a dark fade from below instead (for images whose subject stands on the left)."""
     th = sb["thumbnail"]
     TW, TH = 1280, 720
     accent = hex_rgb(sb.get("accent", "#D4A72C"))
@@ -555,19 +556,28 @@ def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None)
     img = src.resize((TW, TH), Image.LANCZOS, box=(x0, y0, x0 + vw, y0 + vh))
     img = img.filter(ImageFilter.UnsharpMask(2, 70, 2)).convert("RGBA")
     x = np.arange(TW, dtype=np.float32) / TW
-    fade = np.clip((0.66 - x) / 0.36, 0, 1) ** 1.3 * 235          # dark on the left, clear by ~66%
     y = np.arange(TH, dtype=np.float32)[:, None] / TH
-    alpha = np.maximum(fade[None, :], np.clip((y - 0.72) / 0.28, 0, 1) * 150)
+    bottom = th.get("place") == "bottom"
+    if bottom:  # dark from below (title band), plus a light top-left corner for the brand mark
+        alpha = np.maximum(np.clip((y - 0.42) / 0.38, 0, 1) ** 1.2 * 235 + 0 * x[None, :],
+                           np.clip((0.35 - x[None, :]) / 0.35, 0, 1) * np.clip((0.22 - y) / 0.22, 0, 1) * 150)
+    else:
+        fade = np.clip((0.66 - x) / 0.36, 0, 1) ** 1.3 * 235      # dark on the left, clear by ~66%
+        alpha = np.maximum(fade[None, :], np.clip((y - 0.72) / 0.28, 0, 1) * 150)
     shade = Image.new("RGBA", (TW, TH), (8, 8, 10, 0))
     shade.putalpha(Image.fromarray(alpha.astype(np.uint8), "L"))
     img.alpha_composite(shade)
     mark = lockup(sb["lockup"], accent)
     mark = mark.resize((int(mark.width * 0.8), int(mark.height * 0.8)), Image.LANCZOS)
     img.alpha_composite(mark, (54, 40))
-    ty = th.get("top", 120)
-    for text, size, colour in th["lines"]:
-        col = accent if colour == "accent" else (255, 255, 255)
-        t = text_image(text, size, "Bold", col, align="left", max_w=10_000, line_gap=1.18)
+    titles = [(text_image(text, size, "Bold", accent if colour == "accent" else (255, 255, 255), align="left",
+                          max_w=10_000, line_gap=1.18)) for text, size, colour in th["lines"]]
+    tight = th.get("tight", 0.86)
+    if bottom:
+        ty = TH - 46 - int(sum(t.height * tight for t in titles[:-1])) - titles[-1].height
+    else:
+        ty = th.get("top", 120)
+    for t in titles:
         # heavy soft shadow + thin dark outline so the title reads on any image, at any size
         sh = Image.new("RGBA", (t.width + 60, t.height + 60), (0, 0, 0, 0))
         sil = Image.new("RGBA", t.size, (0, 0, 0, 0))
@@ -578,7 +588,7 @@ def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None)
         glow.alpha_composite(sh)
         glow.alpha_composite(t, (30, 30))
         img.alpha_composite(glow, (54 - 30, ty - 30))
-        ty += int(t.height * th.get("tight", 0.86))
+        ty += int(t.height * tight)
     if badge := th.get("badge"):
         b = text_image(badge, 34, "Bold", ink, max_w=10_000, line_gap=1.25)
         pill = Image.new("RGBA", (b.width + 52, b.height + 22), (0, 0, 0, 0))
