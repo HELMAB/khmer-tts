@@ -575,21 +575,27 @@ def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None)
     """Storyboard "thumbnail": {image, view: [x0, y0, height] (image px; width follows 16:9), lines: [[text, size,
     "accent"|"white"], ...], badge, place}. The image fills the frame, a dark fade on the left carries a big bold
     title, the brand mark sits top-left and an optional badge pill sits under the title. "place": "bottom" puts the
-    title along the bottom over a dark fade from below instead (for images whose subject stands on the left)."""
+    title along the bottom over a dark fade from below instead (for images whose subject stands on the left).
+    "aspect": "vertical" makes a 1080x1920 TikTok cover instead (view width follows 9:16, title along the bottom
+    kept inside the 3:4 centre that TikTok's profile grid shows, brand mark below TikTok's top bar)."""
     th = sb["thumbnail"]
-    TW, TH = 1280, 720
+    vertical = th.get("aspect") == "vertical"
+    TW, TH = (1080, 1920) if vertical else (1280, 720)
     accent = hex_rgb(sb.get("accent", "#D4A72C"))
     lum = (0.299 * accent[0] + 0.587 * accent[1] + 0.114 * accent[2]) / 255
     ink = (20, 18, 12) if lum > 0.6 else (255, 255, 255)
     src = Image.open(root / sb["images"][th["image"]]).convert("RGB")
     x0, y0, vh = th["view"]
-    vw = vh * 16 / 9
+    vw = vh * (9 / 16 if vertical else 16 / 9)
     img = src.resize((TW, TH), Image.LANCZOS, box=(x0, y0, x0 + vw, y0 + vh))
     img = img.filter(ImageFilter.UnsharpMask(2, 70, 2)).convert("RGBA")
     x = np.arange(TW, dtype=np.float32) / TW
     y = np.arange(TH, dtype=np.float32)[:, None] / TH
-    bottom = th.get("place") == "bottom"
-    if bottom:  # dark from below (title band), plus a light top-left corner for the brand mark
+    bottom = vertical or th.get("place") == "bottom"
+    if vertical:  # dark from ~45% down for the title, light at the top for the brand mark
+        alpha = np.maximum(np.clip((y - 0.45) / 0.33, 0, 1) ** 1.2 * 235 + 0 * x[None, :],
+                           np.clip((0.22 - y) / 0.22, 0, 1) * 120 + 0 * x[None, :])
+    elif bottom:  # dark from below (title band), plus a light top-left corner for the brand mark
         alpha = np.maximum(np.clip((y - 0.42) / 0.38, 0, 1) ** 1.2 * 235 + 0 * x[None, :],
                            np.clip((0.35 - x[None, :]) / 0.35, 0, 1) * np.clip((0.22 - y) / 0.22, 0, 1) * 150)
     else:
@@ -600,12 +606,14 @@ def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None)
     img.alpha_composite(shade)
     mark = lockup(sb["lockup"], accent)
     mark = mark.resize((int(mark.width * 0.8), int(mark.height * 0.8)), Image.LANCZOS)
-    img.alpha_composite(mark, (54, 40))
+    mx, my = (70, 290) if vertical else (54, 40)
+    img.alpha_composite(mark, (mx, my))
     titles = [(text_image(text, size, "Bold", accent if colour == "accent" else (255, 255, 255), align="left",
                           max_w=10_000, line_gap=1.18)) for text, size, colour in th["lines"]]
     tight = th.get("tight", 0.86)
     if bottom:
-        ty = TH - 46 - int(sum(t.height * tight for t in titles[:-1])) - titles[-1].height
+        bottom_y = TH - 330 if vertical else TH - 46  # vertical: above TikTok's grid crop and caption block
+        ty = bottom_y - int(sum(t.height * tight for t in titles[:-1])) - titles[-1].height
     else:
         ty = th.get("top", 120)
     for t in titles:
@@ -618,7 +626,7 @@ def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None)
         glow = sh.filter(ImageFilter.GaussianBlur(10))
         glow.alpha_composite(sh)
         glow.alpha_composite(t, (30, 30))
-        img.alpha_composite(glow, (54 - 30, ty - 30))
+        img.alpha_composite(glow, (mx - 30, ty - 30))
         ty += int(t.height * tight)
     if badge := th.get("badge"):
         b = text_image(badge, 34, "Bold", ink, max_w=10_000, line_gap=1.25)
@@ -626,7 +634,7 @@ def make_thumbnail(sb: dict, root: Path = PROJECT_ROOT, out: Path | None = None)
         ImageDraw.Draw(pill).rounded_rectangle((0, 0, pill.width - 1, pill.height - 1), radius=pill.height // 2,
                                                fill=accent + (255,))
         pill.alpha_composite(b, (26, 11))
-        img.alpha_composite(pill, (54, ty + 18))
+        img.alpha_composite(pill, (mx, ty + 18))
     out = out or (root / sb["output"]).with_name("thumbnail.jpg")
     img.convert("RGB").save(out, quality=92)
     return out
