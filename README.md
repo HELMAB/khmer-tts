@@ -115,6 +115,16 @@ By hand: `python -m khmer_tts song URL --out videos/audio/<song>` (song, vocals,
 `python -m khmer_tts song videos/audio/<song> --align lyrics.txt --from A --to B` (lyric timings), then
 write a `"style": "story"` storyboard (see `videos/hometown_story.json`) and run `python -m khmer_tts video` on it.
 
+## Voices
+
+| Voice | Sounds like | Good for | Reference clip |
+|---|---|---|---|
+| `rfi` | news anchor | news | 5.0 s of broadcast news |
+| `general` | casual tech TikToker | coding tutorials | 6.6 s |
+| `advice` | calm, warm narrator | advice, quotes, told stories | 6.3 s, voice separated from music |
+| `edu` | gentle, heartfelt narrator | advice, parenting, education | 7.3 s from an "edu" Facebook reel, voice separated from music (Demucs) |
+| `edu_clean` | same as `edu`, cleaned | compare with `edu`, keep the better one | same clip with `--clean` |
+
 ## Clone a new voice
 
 You only need a short recording of one person speaking Khmer: a video, podcast, voice message or

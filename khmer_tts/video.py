@@ -81,6 +81,13 @@ def font(size: int, weight: str = "Regular") -> ImageFont.FreeTypeFont:
     return f
 
 
+@lru_cache(maxsize=None)
+def font_file(path: str, size: int) -> ImageFont.FreeTypeFont:
+    """Another font than Google Sans (only where a style asks for it, e.g. edu "font"), shaped with Raqm."""
+    font(size)  # same Raqm check
+    return ImageFont.truetype(path, size, layout_engine=ImageFont.Layout.RAQM)
+
+
 def hex_rgb(h: str) -> tuple[int, int, int]:
     h = h.lstrip("#")
     return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
@@ -155,11 +162,12 @@ def wrap(text: str, f: ImageFont.FreeTypeFont, max_w: int) -> list[list[str]]:
 
 
 def text_image(text: str, size: int, weight="Regular", color=TEXT, max_w=CONTENT_W,
-               highlight=None, align="center", line_gap=1.55) -> Image.Image:
-    """Render (wrapped) text to a tight RGBA image. Latin tokens get `highlight` colour if given."""
+               highlight=None, align="center", line_gap=1.55, face: str | None = None) -> Image.Image:
+    """Render (wrapped) text to a tight RGBA image. Latin tokens get `highlight` colour if given.
+    `face`: a font file to use instead of Google Sans (weight is then ignored)."""
     if not text.strip():
         return Image.new("RGBA", (1, 1), (0, 0, 0, 0))
-    f = font(size, weight)
+    f = font_file(face, size) if face else font(size, weight)
     lines = wrap(text, f, max_w)
     space = f.getlength(" ")
     line_h = int(size * line_gap)
@@ -1184,6 +1192,9 @@ def render(storyboard_path: Path, out: Path | None = None, workers: int | None =
     if sb.get("style") == "youtube":
         from .youtube_video import render as render_youtube
         return render_youtube(storyboard_path, out, workers, seconds, narration)
+    if sb.get("style") == "edu":
+        from .edu_video import render as render_edu
+        return render_edu(storyboard_path, out, workers, seconds, narration)
     out = out or root / sb["output"]
     out.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1230,6 +1241,9 @@ def render_still(storyboard_path: Path, t: float, out: Path, narration: str | No
     if sb.get("style") == "youtube":
         from .youtube_video import render_still as still_youtube
         return still_youtube(storyboard_path, t, out, narration)
+    if sb.get("style") == "edu":
+        from .edu_video import render_still as still_edu
+        return still_edu(storyboard_path, t, out, narration)
     scenes, captions, sfx, narration_end, total = build_timeline(sb, PROJECT_ROOT)
     _STATE.update(bg=background(sb), **overlays(sb, scenes, PROJECT_ROOT), scenes=scenes, captions=captions,
                   caption_boxes={}, narration_end=narration_end, total=total)
