@@ -124,8 +124,6 @@ write a `"style": "story"` storyboard (see `videos/hometown_story.json`) and run
 | `advice` | calm, warm narrator | advice, quotes, told stories | 6.3 s, voice separated from music |
 | `edu` | gentle, heartfelt narrator | advice, parenting, education | 7.3 s from an "edu" Facebook reel, voice separated from music (Demucs) |
 | `edu_clean` | same as `edu`, cleaned | compare with `edu`, keep the better one | same clip with `--clean` |
-| `kru_it` | warm, lively teacher talking to students | advice for young people, study tips | 5.6 s from a "គ្រូអាយធីចិត្តល្អ" Facebook reel, music-free part |
-| `kru_it_clean` | same as `kru_it`, cleaned | compare with `kru_it` (the clip is a bit noisy, −43 dB floor) | same clip with `--clean` |
 
 ## Clone a new voice
 
